@@ -781,12 +781,119 @@
   ::-webkit-scrollbar { width: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 99px; }
+
+  /* ── Mobile nav bar ── */
+  .mobile-nav {
+    display: none;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: 56px;
+    background: var(--sidebar-bg);
+    border-top: 1px solid #2e2c28;
+    z-index: 50;
+    align-items: center;
+    justify-content: space-around;
+  }
+
+  .mobile-nav-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    background: none;
+    border: none;
+    color: var(--sidebar-muted);
+    font-family: var(--font-body);
+    font-size: 10px;
+    cursor: pointer;
+    padding: 6px 0;
+    transition: color 0.15s;
+  }
+  .mobile-nav-btn.active { color: var(--accent); }
+  .mobile-nav-btn svg { width: 20px; height: 20px; }
+
+  /* ── Mobile sidebar overlay ── */
+  .sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 60;
+  }
+  .sidebar-overlay.show { display: block; }
+
+  @media (max-width: 700px) {
+    body { flex-direction: column; height: 100dvh; }
+
+    .sidebar {
+      position: fixed;
+      top: 0; left: 0; bottom: 0;
+      width: 280px;
+      z-index: 70;
+      transform: translateX(-100%);
+      transition: transform 0.25s ease;
+    }
+    .sidebar.open { transform: translateX(0); }
+
+    .main { flex: 1; overflow: hidden; padding-bottom: 56px; }
+
+    .workspace { flex-direction: column; }
+
+    .note-list {
+      width: 100%;
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+      max-height: 100%;
+      flex: 1;
+    }
+    .note-list.hidden { display: none; }
+
+    .detail { flex: 1; overflow: hidden; }
+    .detail.hidden { display: none; }
+
+    .detail-content { padding: 16px 18px; }
+
+    .save-bar { padding: 10px 18px; }
+
+    .ai-panel .ai-toggle { padding: 12px 18px; }
+    .ai-panel .ai-body { padding: 0 18px 14px; }
+
+    .meta-row { flex-direction: column; gap: 8px; }
+    .meta-field { width: 100%; }
+    .meta-field input, .meta-field select { min-width: unset; width: 100%; }
+
+    .mobile-nav { display: flex; }
+
+    .topbar { padding: 12px 16px; }
+
+    .note-title-input { font-size: 20px; }
+
+    .mobile-back-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: none;
+      border: none;
+      color: var(--accent);
+      font-family: var(--font-body);
+      font-size: 13px;
+      cursor: pointer;
+      padding: 0;
+      margin-bottom: 14px;
+    }
+  }
+
+  .mobile-back-btn { display: none; }
 </style>
 </head>
 <body>
 
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
 <!-- Sidebar -->
-<aside class="sidebar">
+<aside class="sidebar" id="sidebar">
   <div class="sidebar-header">
     <div class="logo">Meeting<span>Mind</span></div>
   </div>
@@ -832,6 +939,7 @@
 
       <div id="detailForm" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
         <div class="detail-content" id="detailContent">
+          <button class="mobile-back-btn" onclick="mobileBack()">← Back to notes</button>
           <div id="assignPrompt" class="assign-prompt" style="display:none;">
             <span class="assign-prompt-icon">📁</span>
             <span>This note has no project. Assign one:</span>
@@ -1119,6 +1227,7 @@ function selectFolder(id) {
   state.activeFolder = id;
   state.activeNote = null;
   state.isNew = false;
+  closeSidebar();
   showEmpty();
   render();
 }
@@ -1130,6 +1239,7 @@ function selectNote(id) {
   editActions = note.actions.map(a => ({...a}));
   populateForm(note);
   showForm();
+  mobileShowDetail();
   render();
 }
 
@@ -1140,6 +1250,7 @@ function newNote() {
   const today = new Date().toISOString().slice(0,10);
   populateForm({ title:'', date: today, attendees:'', folderId: state.activeFolder || '', body:'', actions:[] });
   showForm(true);
+  mobileShowDetail();
   document.getElementById('deleteBtn').style.display = 'none';
   render();
 }
@@ -1438,6 +1549,39 @@ function importData(e) {
   reader.readAsText(file);
 }
 
+function isMobile() { return window.innerWidth <= 700; }
+
+function openSidebar() {
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('sidebarOverlay').classList.add('show');
+}
+
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebarOverlay').classList.remove('show');
+}
+
+function mobileShowNotes() {
+  document.getElementById('noteList').classList.remove('hidden');
+  document.getElementById('detailPanel').classList.add('hidden');
+  document.getElementById('mobileNotesBtn').classList.add('active');
+  document.getElementById('mobileNewBtn').classList.remove('active');
+}
+
+function mobileShowDetail() {
+  if (!isMobile()) return;
+  document.getElementById('noteList').classList.add('hidden');
+  document.getElementById('detailPanel').classList.remove('hidden');
+  document.getElementById('mobileNotesBtn').classList.remove('active');
+}
+
+function mobileBack() {
+  mobileShowNotes();
+  state.activeNote = null;
+  showEmpty();
+  render();
+}
+
 render();
 
 // Expose functions to global scope (required for onclick attributes with type="module")
@@ -1460,6 +1604,26 @@ window.toggleAi = toggleAi;
 window.askAi = askAi;
 window.exportData = exportData;
 window.importData = importData;
+window.openSidebar = openSidebar;
+window.closeSidebar = closeSidebar;
+window.mobileShowNotes = mobileShowNotes;
+window.mobileBack = mobileBack;
 </script>
+<!-- Mobile nav -->
+<nav class="mobile-nav" id="mobileNav">
+  <button class="mobile-nav-btn active" id="mobileNotesBtn" onclick="mobileShowNotes()">
+    <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M9 12h6M9 8h6M9 16h4M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z"/></svg>
+    Notes
+  </button>
+  <button class="mobile-nav-btn" id="mobileNewBtn" onclick="newNote()">
+    <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
+    New
+  </button>
+  <button class="mobile-nav-btn" id="mobileFoldersBtn" onclick="openSidebar()">
+    <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg>
+    Projects
+  </button>
+</nav>
+
 </body>
 </html>
