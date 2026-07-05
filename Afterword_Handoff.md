@@ -85,6 +85,7 @@ Firebase/Firestore has been **reconnected**, on a fresh project set up from scra
 
 - **New project:** `afterword-53cd7` (Firebase Console → Project Settings for the full `firebaseConfig`, embedded directly in `app.js` — the web API key is not secret; it's not a credential, just a client identifier, and access is governed entirely by the Firestore rules and auth below).
 - **Auth:** Firebase Authentication, Google Sign-In only. The app is gated behind sign-in — no anonymous/offline mode. `app.js` shows a full-screen sign-in overlay (`#signinScreen`) until `onAuthStateChanged` reports a signed-in user.
+- **Sign-out forces a full page reload.** `signOutUser()` awaits any in-flight `saveData()` write, calls `signOut(auth)`, then `location.reload()`. This was added after in-memory state (`state.notes`, `editActions`, populated detail-form fields) proved to leak a previous account's note content into the next signed-in account's session within the same page load, even after multiple attempts to manually reset every relevant variable on sign-out/sign-in. A hard reload closes this class of bug structurally — no JS state can survive a full navigation — rather than relying on remembering to reset every current and future piece of client-side state by hand. Don't remove this to make sign-out feel more "SPA-like" without addressing the underlying state-leak risk it guards against.
 - **Security rules:**
   ```
   rules_version = '2';

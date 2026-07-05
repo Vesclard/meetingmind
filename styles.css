@@ -393,6 +393,8 @@ html { scrollbar-color: var(--line) transparent; scrollbar-width: thin; }
   transition: border-color .2s ease, color .2s ease;
 }
 .signout-btn:hover { border-color: var(--accent); color: var(--accent); }
+.signout-btn:disabled { opacity: .5; cursor: default; }
+.signout-btn:disabled:hover { border-color: var(--line); color: var(--muted); }
 
 /* ── Sign-in gate ── */
 .signin-screen {

@@ -81,15 +81,23 @@ async function loadUserData(uid) {
   }
 }
 
+let pendingSave = null;
+
 async function saveData() {
   if (!currentUser) return false;
-  try {
-    await setDoc(userDocRef(currentUser.uid), { folders: state.folders, notes: state.notes });
-    return true;
-  } catch(e) {
-    console.warn('Failed to save notes to Firestore', e);
-    return false;
-  }
+  const promise = (async () => {
+    try {
+      await setDoc(userDocRef(currentUser.uid), { folders: state.folders, notes: state.notes });
+      return true;
+    } catch(e) {
+      console.warn('Failed to save notes to Firestore', e);
+      return false;
+    }
+  })();
+  pendingSave = promise;
+  const result = await promise;
+  if (pendingSave === promise) pendingSave = null;
+  return result;
 }
 
 async function signInWithGoogle() {
@@ -104,7 +112,17 @@ async function signInWithGoogle() {
 }
 
 async function signOutUser() {
+  const signOutBtn = document.getElementById('signOutBtn');
+  if (signOutBtn) {
+    signOutBtn.disabled = true;
+    signOutBtn.title = 'Signing out…';
+  }
+  if (pendingSave) await pendingSave;
   await signOut(auth);
+  // Force a full reload so no in-memory state from this account can ever
+  // survive into the next signed-in session, regardless of what state
+  // exists in module-level variables.
+  location.reload();
 }
 
 let state = {
