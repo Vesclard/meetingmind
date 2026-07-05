@@ -378,11 +378,11 @@ async function askAi() {
   }).join('\n\n---\n\n');
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetch('/api/ask', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-3-5-sonnet-latest',
         max_tokens: 1000,
         system: `You are a helpful assistant for a personal meeting notes app. Answer the user's question based only on their meeting notes below. Be concise and specific. If you can't find the answer in the notes, say so.\n\n--- NOTES ---\n${notesContext}`,
         messages: [{ role: 'user', content: q }]

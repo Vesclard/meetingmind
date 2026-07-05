@@ -12,11 +12,12 @@ Read `Afterword_Handoff.md` in full before making changes — it's the authorita
 
 ## Repo structure
 
-Three static files, no build step:
+Three static files, plus serverless configuration:
 - `afterword.html` — markup only: sidebar, note list, detail panel, AI panel, folder modal, mobile bottom nav, plus `<link>`/`<script src>` tags pulling in the other two files.
 - `styles.css` — all CSS, including the `@media (max-width: 700px)` mobile layout.
-- `app.js` — entire app logic, loaded as `<script type="module" src="app.js">`. State management, rendering (manual DOM/innerHTML, no framework).
-- `index.html` — redirect stub to `afterword.html` (meta refresh + JS `location.replace`), since there's no build step to make `afterword.html` the served root.
+- `app.js` — entire app logic, loaded as `<script type="module" src="app.js">`. Calls server-side `/api/ask` for the AI assistant.
+- `vercel.json` — Vercel configuration: rewrites `/` to `/afterword.html`.
+- `/api/ask.js` — Vercel Node.js Serverless Function proxying Anthropic API calls.
 
 No package.json, no dependencies to install, no test suite.
 
@@ -39,7 +40,7 @@ note = { id, folderId, title, date, attendees, body, actions: [{ id, text, assig
 ```
 Every note belongs to exactly one folder; folders are the only categorization mechanism (no tags) — this is a deliberate product choice, not an oversight, so don't reintroduce tagging/auto-categorization without checking with the user.
 
-**AI assistant** (`askAi`): serializes *all* notes into one context blob and sends it as the `system` prompt to `https://api.anthropic.com/v1/messages` directly from the browser, with no API key in the request. This currently only works in contexts (like Claude.ai artifacts) that inject the key for you — in a real deployed static site this call has no way to authenticate. Fixing this properly requires moving the call server-side (e.g. a Vercel serverless function) rather than adding a client-side key, since a hardcoded key would be exposed in page source.
+**AI assistant** (`askAi`): serializes *all* notes into one context blob and sends them to the local `/api/ask` proxy, which injects the `ANTHROPIC_API_KEY` environment variable and calls the Anthropic API.
 
 **Security note**: with no Firestore, all data lives only in the browser's `localStorage` on whatever device the user is on — there's currently no cross-device sync at all. This is the tradeoff for pulling Firebase out; expect it to come back once Firebase is set up fresh (see `Afterword_Handoff.md`).
 

@@ -33,11 +33,12 @@ Afterword is a personal meeting notes app that solves a specific problem: notes 
 
 ## 3. File Structure
 
-Four files, no build step:
+No-build static structure:
 - `afterword.html` — markup only: sidebar, note list, detail panel, AI panel, modals, mobile bottom nav. Links to the two files below via `<link rel="stylesheet" href="styles.css">` and `<script type="module" src="app.js">`.
 - `styles.css` — all CSS, including a `@media (max-width: 700px)` block for mobile.
-- `app.js` — all app logic and state management.
-- `index.html` — a redirect stub (meta refresh + JS) that forwards the site root to `afterword.html`, since there's no build step to make `afterword.html` the served root by default.
+- `app.js` — all app logic and state management. Calls `/api/ask` for the AI assistant.
+- `vercel.json` — Vercel routing configuration: rewrites `/` to `/afterword.html` (avoiding index.html redirect stubs).
+- `/api/ask.js` — Node.js Serverless Function that proxies Claude API requests and injects the `ANTHROPIC_API_KEY` securely.
 
 **Important quirk:** Because `app.js` is loaded as `type="module"`, all functions called from inline `onclick="..."` HTML attributes in `afterword.html` must be explicitly exposed via `window.functionName = functionName` at the bottom of `app.js`. If a new function is added and referenced from HTML, it **must** be added to this list or clicks will silently fail.
 
@@ -103,7 +104,7 @@ Firebase/Firestore integration has been **removed from the app entirely** — no
 
 1. **No local dev environment (historically).** The user's work PC has not allowed installing Node, the Firebase CLI, or other local tooling. Confirm this constraint still holds before suggesting CLI-based workflows or a build step.
 2. **No cloud sync currently.** Firebase/Firestore was removed (Section 6); the app is `localStorage`-only, single-device, no login system. This is intentional and temporary, not a regression to silently "fix" — wait for the user's go-ahead on the fresh Firebase setup rather than reintroducing the old integration.
-3. **The Claude API key is not yet wired in properly** — the AI assistant fetch call in the code assumes a key is available via the Anthropic API endpoint but does **not** include an explicit key parameter, relying on it being handled by environment/proxy context assumptions. **This needs verification** — if the AI assistant stops working in a real deployed (non-Claude.ai-artifact) context, this is the first place to check, since a real Vercel-hosted static site has no mechanism to inject a server-side API key. This likely needs a small serverless function (Vercel Function) to proxy the Claude API call securely instead of calling it directly from the client.
+3. **The Claude API key is secure** — the AI assistant calls the server-side `/api/ask.js` proxy. The `ANTHROPIC_API_KEY` must be configured as an environment variable in Vercel, keeping it secret.
 4. **`type="module"` + inline `onclick`** requires the `window.fn = fn` exposure pattern described in Section 3. Easy to forget when adding features. Applies to `app.js` regardless of it being an external file rather than inline.
 5. Categorization is **folders only** (by deliberate user choice) — do not reintroduce tags/auto-categorization without checking with the user first.
 
@@ -113,7 +114,7 @@ Firebase/Firestore integration has been **removed from the app entirely** — no
 
 ### Priority 1 — Security & sync (blocked on fresh Firebase setup)
 - **Set up a new Firebase project from scratch** (not the old `meetingmind-af171`) and wire Firestore back into `app.js`. Do this with real security from day one — e.g. Firebase Authentication (Google Sign-In) plus `allow read, write: if request.auth != null;` — rather than reintroducing the old open/time-cutoff rules.
-- **Move the Claude API call server-side.** Calling the Anthropic API directly from client-side JS means the API key (if hardcoded) would be exposed to anyone who views the page source. Add a minimal Vercel Serverless Function (`/api/ask.js`) that holds the key server-side and proxies the request. This is a bigger architectural change but important before wider use.
+- **Move the Claude API call server-side.** ✅ Completed. Implemented via the Vercel serverless function `/api/ask.js` and local endpoint mapping in `app.js`.
 
 ### Priority 2 — Reliability
 - **Add conflict handling for concurrent edits.** Once cloud sync is back: if the same note is edited on two devices while offline, the last save would silently overwrite the other. Worth adding a simple `updatedAt` timestamp check with a warning if a conflict is detected.
