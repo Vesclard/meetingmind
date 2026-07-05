@@ -3,7 +3,7 @@
 **Last updated:** July 2026
 **Status:** Live, working prototype deployed to production
 **Owner:** Vesclard (solo developer)
-**Note:** This app was previously named "MeetingMind" during development. It has been rebranded to **Afterword** — filename, in-app branding, `localStorage` key, and export filename are done. The GitHub repo name still reads `meetingmind`, and the Firebase project ID (`meetingmind-af171`) permanently does, by design — see Section 10 for the current rebrand status.
+**Note:** This app was previously named "MeetingMind" during development. It has been rebranded to **Afterword** — filename, in-app branding, `localStorage` key, export filename, and the GitHub repo name are all done. Only the Firebase project ID (`meetingmind-af171`) still references the old name, permanently, by design — see Section 10 for the current rebrand status.
 
 ---
 
@@ -24,7 +24,7 @@ Afterword is a personal meeting notes app that solves a specific problem: notes 
 | Database | Firebase Firestore (Standard edition, Spark/free plan) |
 | Local cache | Browser `localStorage` (key: `afterword_v1`, migrated one-time from the old `meetingmind_v1` key) |
 | AI | Anthropic Claude API, called directly from the browser (`claude-sonnet-4-20250514`) |
-| Hosting | Vercel, deployed via a GitHub repository (still named `meetingmind` — not yet renamed, see Section 10) |
+| Hosting | Vercel, deployed via a GitHub repository (`afterword`) |
 | Firebase region | `asia-southeast1` (Singapore — closest available to Jakarta) |
 
 **Why this stack:** No installs required on the user's constrained work PC. Everything ships as one HTML file with no build tooling, deployed through web-only interfaces (GitHub web upload → Vercel import).
@@ -102,7 +102,7 @@ service cloud.firestore {
 ## 7. Deployment Setup
 
 - **Firebase project:** `meetingmind-af171`
-- **Repo:** GitHub, repository name `meetingmind`, public visibility
+- **Repo:** GitHub, repository name `afterword`, public visibility
 - **Hosting:** Vercel, imported directly from the GitHub repo
 - **Deploy flow:** Edit `afterword.html` locally → upload/commit to GitHub (via web UI, no git CLI used) → Vercel auto-redeploys on push
 - **No Firebase Hosting or Firebase CLI used** — user's work PC does not allow local installs, so the entire workflow is web-only (GitHub web upload + Vercel import), no `npm`, `node`, or `firebase-tools` involved anywhere in this project.
@@ -152,10 +152,10 @@ The product is now called **Afterword**. Status as of this update:
 - **`localStorage` key** — ✅ Done. Now `afterword_v1`. `loadFromLocalStorage()` does a one-time migration: if the new key is empty, it reads the old `meetingmind_v1` key, copies it forward, and deletes the old key. No user data is lost.
 - **Export backup filename** — ✅ Done. Downloads are now named `afterword-backup-<date>.json` instead of `meetingmind-backup-<date>.json`.
 - **Firebase project ID** — ⏸️ Left as `meetingmind-af171`, per the recommended option below. Cannot be renamed (Firebase project IDs are permanent once created). Code now has a comment explaining this. Only worth migrating to a new `afterword`-named project if the old name bothers the user for more than internal plumbing — that would mean provisioning a new project and migrating all Firestore data.
-- **GitHub repo name** — ⏸️ Not yet done. Still `meetingmind` (remote: `git@github.com:Vesclard/meetingmind.git`). This is an external/shared-infrastructure change (affects the GitHub URL and the Vercel deployment link), so it wasn't done automatically — do it via GitHub repo Settings → rename, then verify Vercel's connection still triggers deploys afterward (GitHub repo renames typically keep redirects, and Vercel tracks by repo ID, but confirm after renaming).
+- **GitHub repo name** — ✅ Done. Renamed to `afterword` (remote: `git@github.com:Vesclard/afterword.git`). Verify Vercel's deployment connection still triggers on push, since Vercel typically tracks by repo ID and should have followed automatically, but this hasn't been independently confirmed.
 - **Handoff doc, devlogs, and any external touchpoints** (portfolio site project card, GitHub description, etc.) — should reference **Afterword** going forward; not tracked as part of this repo.
 
-**Remaining order of operations:** rename the GitHub repo when convenient (low urgency, cosmetic), and leave the Firebase project ID alone unless the user explicitly wants to migrate.
+**Remaining:** nothing left except the Firebase project ID, which stays as-is unless the user explicitly wants to migrate.
 
 ---
 

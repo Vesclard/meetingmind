@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Afterword is a single-user personal meeting-notes app: structured notes organized by project folder, with search and an AI assistant over all notes. It is **not** a multi-tenant product — designed and built for one person's own use. The app was originally called "MeetingMind"; the in-app branding, filename, `localStorage` key, and export filename have been rebranded to Afterword, but the Firebase project ID (`meetingmind-af171`) is permanent and stays as an internal-only identifier, and the GitHub repo name may still lag (see `Afterword_Handoff.md` §10 for what's left).
+Afterword is a single-user personal meeting-notes app: structured notes organized by project folder, with search and an AI assistant over all notes. It is **not** a multi-tenant product — designed and built for one person's own use. The app was originally called "MeetingMind"; in-app branding, filename, `localStorage` key, export filename, and the GitHub repo name have all been rebranded to Afterword. Only the Firebase project ID (`meetingmind-af171`) still references the old name — it's permanent and stays as an internal-only identifier (see `Afterword_Handoff.md` §10).
 
 Read `Afterword_Handoff.md` in full before making changes — it's the authoritative, up-to-date handoff doc (tech stack, data model, known issues, priorities). Don't duplicate its contents here; this file only covers what a coding agent needs to act inside the codebase.
 
