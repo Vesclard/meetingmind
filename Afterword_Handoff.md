@@ -4,6 +4,7 @@
 **Status:** Live, working prototype deployed to production
 **Owner:** Vesclard (solo developer)
 **Note:** This app was previously named "MeetingMind" during development. It has been rebranded to **Afterword** — filename, in-app branding, `localStorage` key, export filename, and the GitHub repo name are all done. Only the Firebase project ID (`meetingmind-af171`) still references the old name, permanently, by design — see Section 10 for the current rebrand status.
+**Firebase status:** Firebase/Firestore has been **intentionally removed** from the app — the plan is to set up a fresh Firebase project and deployment from scratch (rather than keep the old `meetingmind-af171` project) at a later date. Until that happens, the app is **`localStorage`-only**: single-device, no cloud sync, no cross-device access. See Section 6.
 
 ---
 
@@ -19,28 +20,26 @@ Afterword is a personal meeting notes app that solves a specific problem: notes 
 
 | Layer | Technology |
 |---|---|
-| Frontend | Single self-contained HTML file — vanilla JS, no frameworks, no build step |
+| Frontend | Static HTML/CSS/JS (three files: `afterword.html`, `styles.css`, `app.js`) — vanilla JS, no frameworks, no build step |
 | Styling | Custom CSS (no Tailwind/Bootstrap), DM Serif Display + DM Sans fonts |
-| Database | Firebase Firestore (Standard edition, Spark/free plan) |
-| Local cache | Browser `localStorage` (key: `afterword_v1`, migrated one-time from the old `meetingmind_v1` key) |
+| Database | None currently. Previously Firebase Firestore — removed; a fresh Firebase project will be set up later (see Firebase status note above and Section 6) |
+| Storage | Browser `localStorage` only (key: `afterword_v1`, migrated one-time from the old `meetingmind_v1` key) — this is the sole data store right now |
 | AI | Anthropic Claude API, called directly from the browser (`claude-sonnet-4-20250514`) |
 | Hosting | Vercel, deployed via a GitHub repository (`afterword`) |
-| Firebase region | `asia-southeast1` (Singapore — closest available to Jakarta) |
 
-**Why this stack:** No installs required on the user's constrained work PC. Everything ships as one HTML file with no build tooling, deployed through web-only interfaces (GitHub web upload → Vercel import).
+**Why this stack:** No installs required on the user's constrained work PC. Everything ships as static files with no build tooling, deployed through web-only interfaces (GitHub web upload → Vercel import).
 
 ---
 
 ## 3. File Structure
 
-There is currently **one file**: `afterword.html`
+Four files, no build step:
+- `afterword.html` — markup only: sidebar, note list, detail panel, AI panel, modals, mobile bottom nav. Links to the two files below via `<link rel="stylesheet" href="styles.css">` and `<script type="module" src="app.js">`.
+- `styles.css` — all CSS, including a `@media (max-width: 700px)` block for mobile.
+- `app.js` — all app logic and state management.
+- `index.html` — a redirect stub (meta refresh + JS) that forwards the site root to `afterword.html`, since there's no build step to make `afterword.html` the served root by default.
 
-Everything lives inside it:
-- `<style>` block — all CSS, including a `@media (max-width: 700px)` block for mobile
-- HTML body — sidebar, note list, detail panel, AI panel, modals, mobile bottom nav
-- `<script type="module">` — app logic, Firebase SDK imports (via CDN `gstatic.com` URLs), all state management
-
-**Important quirk:** Because the script uses `type="module"`, all functions called from inline `onclick="..."` HTML attributes must be explicitly exposed via `window.functionName = functionName` at the bottom of the script. If a new function is added and referenced from HTML, it **must** be added to this list or clicks will silently fail.
+**Important quirk:** Because `app.js` is loaded as `type="module"`, all functions called from inline `onclick="..."` HTML attributes in `afterword.html` must be explicitly exposed via `window.functionName = functionName` at the bottom of `app.js`. If a new function is added and referenced from HTML, it **must** be added to this list or clicks will silently fail.
 
 ---
 
@@ -60,7 +59,7 @@ note = {
 
 - Every note belongs to exactly **one folder** (project). Folders are the only categorization method — no tags.
 - If a note has no `folderId`, the UI shows an inline prompt forcing the user to assign one before saving.
-- Firestore collections: `folders` and `notes`, one document per item, document ID = the item's `id`.
+- Stored as a single JSON blob in `localStorage` (key `afterword_v1`): `{ folders: [...], notes: [...] }`.
 
 ---
 
@@ -73,62 +72,53 @@ note = {
 - AI assistant panel — sends all notes as context to Claude, answers natural-language questions
 - Export button — downloads all data as a timestamped JSON backup
 - Import button — merges an imported JSON file with existing data (does not overwrite; matches by ID)
-- Firestore cloud sync — read on load, write on every save/delete/folder-create
-- `localStorage` as an instant-load cache, refreshed from Firestore in the background
-- Sync status indicator in the top bar ("Syncing…" / "Saved ✓")
+- `localStorage` as the sole data store — instant load, no network round-trip, but single-device only (no cloud sync currently — see Firebase status note at the top)
+- Save status indicator in the top bar ("Saved ✓")
 - Responsive mobile layout — bottom nav bar (Notes / New / Projects), slide-in sidebar, single-column note list ↔ detail view switching
 
 ---
 
-## 6. Current Firestore Security Rules
+## 6. Firebase Status
 
-Rules are currently **open with a time-based cutoff**:
+Firebase/Firestore integration has been **removed from the app entirely** — no `firebaseConfig`, no Firestore reads/writes, `app.js` has zero Firebase dependencies. This was a deliberate interim step, not an accident:
 
-```
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if request.time < timestamp.date(2026, 4, 30);
-    }
-  }
-}
-```
-
-⚠️ **This is temporary and insecure.** Anyone with the Firebase project's public config (which is embedded in the client-side HTML — unavoidable for a browser app) can currently read/write the database until the cutoff date. This is flagged as priority #1 in the next steps below.
+- The old Firestore setup (project `meetingmind-af171`) shipped with open, time-cutoff-gated security rules (`allow read, write: if request.time < timestamp.date(2026, 4, 30)`) — anyone with the project's public config could read/write the database. This was flagged as the top security gap in earlier versions of this doc.
+- Rather than patch that project, the plan is to **set up Firebase from scratch** later — a new project, proper security rules from day one (likely Firebase Authentication + `allow read, write: if request.auth != null;`), and reconnect the app to it.
+- Until that happens, the app runs on **`localStorage` only** (see Sections 2 and 5). This means: single-device, no backup beyond manual Export, and no login/auth surface at all currently — there's nothing to secure because there's no server-side data store.
+- When Firebase setup resumes: get the new project's `firebaseConfig` from the Firebase Console (Project Settings → your web app), decide on the security rules approach, then wire both back into `app.js`. The old Firestore read/write functions are still visible in git history (`git log -p -- afterword.html app.js`) as a reference for the previous implementation shape, though the new version should ship with real auth from the start rather than reproducing the old open-rules approach.
 
 ---
 
 ## 7. Deployment Setup
 
-- **Firebase project:** `meetingmind-af171`
+- **Firebase project:** none currently connected — old project `meetingmind-af171` is disconnected from the app pending a fresh Firebase setup (Section 6)
 - **Repo:** GitHub, repository name `afterword`, public visibility
 - **Hosting:** Vercel, imported directly from the GitHub repo
-- **Deploy flow:** Edit `afterword.html` locally → upload/commit to GitHub (via web UI, no git CLI used) → Vercel auto-redeploys on push
-- **No Firebase Hosting or Firebase CLI used** — user's work PC does not allow local installs, so the entire workflow is web-only (GitHub web upload + Vercel import), no `npm`, `node`, or `firebase-tools` involved anywhere in this project.
+- **Deploy flow:** Edit `afterword.html` / `styles.css` / `app.js` locally → commit to GitHub → Vercel auto-redeploys on push
+- **No Firebase Hosting or Firebase CLI used** — user's work PC has historically not allowed local installs, so the workflow has been web-only (GitHub web upload + Vercel import), no `npm`, `node`, or `firebase-tools` involved. (Note: some recent iteration used the `git` CLI directly rather than the GitHub web UI — confirm with the user which workflow is current before assuming either.)
 
 ---
 
 ## 8. Known Constraints / Things a New Agent Should Know
 
-1. **No local dev environment.** The user cannot install Node, the Firebase CLI, or any other local tooling. All iteration must happen via direct file edits + web-based redeploy (GitHub web editor/upload → Vercel auto-deploy). Do not suggest CLI-based workflows without checking this constraint still holds.
-2. **No authentication yet.** There is no login system. The app currently trusts anyone with the URL and open Firestore rules. This is the most urgent gap.
+1. **No local dev environment (historically).** The user's work PC has not allowed installing Node, the Firebase CLI, or other local tooling. Confirm this constraint still holds before suggesting CLI-based workflows or a build step.
+2. **No cloud sync currently.** Firebase/Firestore was removed (Section 6); the app is `localStorage`-only, single-device, no login system. This is intentional and temporary, not a regression to silently "fix" — wait for the user's go-ahead on the fresh Firebase setup rather than reintroducing the old integration.
 3. **The Claude API key is not yet wired in properly** — the AI assistant fetch call in the code assumes a key is available via the Anthropic API endpoint but does **not** include an explicit key parameter, relying on it being handled by environment/proxy context assumptions. **This needs verification** — if the AI assistant stops working in a real deployed (non-Claude.ai-artifact) context, this is the first place to check, since a real Vercel-hosted static site has no mechanism to inject a server-side API key. This likely needs a small serverless function (Vercel Function) to proxy the Claude API call securely instead of calling it directly from the client.
-4. **`type="module"` + inline `onclick`** requires the `window.fn = fn` exposure pattern described in Section 3. Easy to forget when adding features.
+4. **`type="module"` + inline `onclick`** requires the `window.fn = fn` exposure pattern described in Section 3. Easy to forget when adding features. Applies to `app.js` regardless of it being an external file rather than inline.
 5. Categorization is **folders only** (by deliberate user choice) — do not reintroduce tags/auto-categorization without checking with the user first.
 
 ---
 
 ## 9. Suggested Next Steps for Improvement
 
-### Priority 1 — Security
-- **Add authentication.** Wire in Firebase Authentication (Google Sign-In is the fastest option, ~10 minutes of setup) and change Firestore rules to `allow read, write: if request.auth != null;`. This closes the open-database window before the current temporary rule cutoff (April 30, 2026) is reached.
+### Priority 1 — Security & sync (blocked on fresh Firebase setup)
+- **Set up a new Firebase project from scratch** (not the old `meetingmind-af171`) and wire Firestore back into `app.js`. Do this with real security from day one — e.g. Firebase Authentication (Google Sign-In) plus `allow read, write: if request.auth != null;` — rather than reintroducing the old open/time-cutoff rules.
 - **Move the Claude API call server-side.** Calling the Anthropic API directly from client-side JS means the API key (if hardcoded) would be exposed to anyone who views the page source. Add a minimal Vercel Serverless Function (`/api/ask.js`) that holds the key server-side and proxies the request. This is a bigger architectural change but important before wider use.
 
 ### Priority 2 — Reliability
-- **Add conflict handling for concurrent edits.** If the same note is edited on two devices while offline, the last save silently overwrites the other. Worth adding a simple `updatedAt` timestamp check with a warning if a conflict is detected.
-- **Add loading/error states for Firestore calls.** Currently failures are caught silently (`console.warn`) with no user-facing feedback beyond the sync status label. A failed save should surface clearly, not just log to console.
-- **Add a "Reset app" button** (mentioned but not yet built) to clear local + remote data cleanly without needing DevTools.
+- **Add conflict handling for concurrent edits.** Once cloud sync is back: if the same note is edited on two devices while offline, the last save would silently overwrite the other. Worth adding a simple `updatedAt` timestamp check with a warning if a conflict is detected.
+- **Add loading/error states for remote calls**, once Firestore is reconnected — don't just `console.warn` on failure; surface it to the user.
+- **Add a "Reset app" button** (mentioned but not yet built) to clear local (and, later, remote) data cleanly without needing DevTools.
 
 ### Priority 3 — UX polish
 - **Autosave.** Currently requires an explicit "Save" click; a debounced autosave would remove friction and reduce the risk of losing edits.
@@ -151,7 +141,7 @@ The product is now called **Afterword**. Status as of this update:
 - **Filename** — ✅ Done. Renamed `meetingmind.html` → `afterword.html` (via `git mv`, history preserved).
 - **`localStorage` key** — ✅ Done. Now `afterword_v1`. `loadFromLocalStorage()` does a one-time migration: if the new key is empty, it reads the old `meetingmind_v1` key, copies it forward, and deletes the old key. No user data is lost.
 - **Export backup filename** — ✅ Done. Downloads are now named `afterword-backup-<date>.json` instead of `meetingmind-backup-<date>.json`.
-- **Firebase project ID** — ⏸️ Left as `meetingmind-af171`, per the recommended option below. Cannot be renamed (Firebase project IDs are permanent once created). Code now has a comment explaining this. Only worth migrating to a new `afterword`-named project if the old name bothers the user for more than internal plumbing — that would mean provisioning a new project and migrating all Firestore data.
+- **Firebase project ID** — superseded. The app no longer connects to Firebase at all (Section 6); the old `meetingmind-af171` project is disconnected pending a brand-new Firebase project being set up from scratch, so its name is now moot rather than something to migrate.
 - **GitHub repo name** — ✅ Done. Renamed to `afterword` (remote: `git@github.com:Vesclard/afterword.git`). Verify Vercel's deployment connection still triggers on push, since Vercel typically tracks by repo ID and should have followed automatically, but this hasn't been independently confirmed.
 - **Handoff doc, devlogs, and any external touchpoints** (portfolio site project card, GitHub description, etc.) — should reference **Afterword** going forward; not tracked as part of this repo.
 
@@ -163,8 +153,8 @@ The product is now called **Afterword**. Status as of this update:
 
 If picking this project up cold:
 1. Read this document fully before touching code.
-2. Open `afterword.html` and locate the `<script type="module">` block — this is the entire application logic.
-3. Check the current Firestore rules cutoff date (Section 6) — if it has passed, the app is currently broken for the user and this is the first fix needed.
+2. Open `app.js` — this is the entire application logic. `afterword.html` is markup only; `styles.css` is all styling.
+3. Note the app currently has **no Firebase/Firestore** — it's `localStorage`-only, single-device, by deliberate interim choice (Section 6). Don't "fix" this by re-adding the old Firestore integration; a fresh Firebase setup is planned and should ship with real auth from the start.
 4. Confirm whether the user still lacks local dev tooling before suggesting any CLI-based approach.
-5. Treat Priority 1 (security) items as the most urgent unless the user explicitly says otherwise.
+5. Treat Priority 1 items (fresh Firebase setup + server-side Claude API call) as the most urgent unless the user explicitly says otherwise.
 6. Note the app is called **Afterword** now, not MeetingMind — see Section 10 before renaming any files or infrastructure.
