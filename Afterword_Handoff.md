@@ -171,6 +171,5 @@ If picking this project up cold:
 
 ### Claude API — Distribution Problem
 
-- Currently the Claude API is called **directly from the browser**, which exposes the API key client-side.
-- This is acceptable for a single-user personal tool.
-- **Before distributing to other users** (e.g. a public App Store listing), a **backend proxy** is needed to keep the API key server-side — a lightweight serverless function (e.g. a Vercel API route) that forwards requests to Anthropic on behalf of the client. This overlaps with the Priority 1 server-side Claude API work noted in Section 11.
+- ✅ Resolved for the current single-user deployment. The Claude API is called server-side via the Vercel serverless function `/api/ask.js`, which injects `ANTHROPIC_API_KEY` from the environment — the key is never exposed client-side. `app.js` calls this proxy rather than the Anthropic API directly.
+- **Before distributing to other users** (e.g. a public App Store listing), revisit this proxy for multi-tenant concerns — e.g. per-user rate limiting or auth on `/api/ask.js` — since it currently assumes a single trusted caller rather than arbitrary public users.
