@@ -70,8 +70,9 @@ async function loadUserData(uid) {
       state.folders = data.folders || [];
       state.notes = data.notes || [];
     } else {
-      state.folders = DEFAULT_DATA.folders;
-      state.notes = DEFAULT_DATA.notes;
+      // Deep-clone so per-account edits never mutate the shared DEFAULT_DATA constant.
+      state.folders = JSON.parse(JSON.stringify(DEFAULT_DATA.folders));
+      state.notes = JSON.parse(JSON.stringify(DEFAULT_DATA.notes));
       await setDoc(userDocRef(uid), { folders: state.folders, notes: state.notes });
     }
   } catch(e) {
