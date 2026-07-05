@@ -478,6 +478,14 @@ function closeSidebar() {
   document.getElementById('sidebarOverlay').classList.remove('show');
 }
 
+function toggleSidebarCollapse() {
+  const collapsed = document.getElementById('sidebar').classList.toggle('collapsed');
+  const btn = document.getElementById('sidebarCollapseBtn');
+  btn.title = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+  btn.setAttribute('aria-label', btn.title);
+  try { localStorage.setItem('afterword_sidebar_collapsed', collapsed ? '1' : '0'); } catch(e) {}
+}
+
 function mobileShowNotes() {
   document.getElementById('noteList').classList.remove('hidden');
   document.getElementById('detailPanel').classList.add('hidden');
@@ -519,6 +527,12 @@ function toggleTheme() {
 }
 
 syncThemeIcons();
+try {
+  if (localStorage.getItem('afterword_sidebar_collapsed') === '1') {
+    document.getElementById('sidebar').classList.add('collapsed');
+    document.getElementById('sidebarCollapseBtn').title = 'Expand sidebar';
+  }
+} catch(e) {}
 render();
 if (isMobile()) mobileShowNotes();
 
@@ -549,6 +563,7 @@ window.exportData = exportData;
 window.importData = importData;
 window.openSidebar = openSidebar;
 window.closeSidebar = closeSidebar;
+window.toggleSidebarCollapse = toggleSidebarCollapse;
 window.mobileShowNotes = mobileShowNotes;
 window.mobileBack = mobileBack;
 window.toggleTheme = toggleTheme;
