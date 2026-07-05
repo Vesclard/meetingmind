@@ -1,13 +1,14 @@
-const FOLDER_COLORS = ['#c17f3e','#7c6faa','#2e7d52','#c0392b','#2471a3','#d4ac0d','#a04000','#1a5276'];
+// Muted-but-specific folder tones, derived from the Vesatile palette
+const FOLDER_COLORS = ['#3B5244','#8B3A3A','#A8842C','#4A6274','#6E5A7E','#31606B','#9C6B4E','#7A8581'];
 
 const STORAGE_KEY = 'afterword_v1';
 const OLD_STORAGE_KEY = 'meetingmind_v1'; // pre-rebrand key — migrated once in loadFromLocalStorage, then unused
 
 const DEFAULT_DATA = {
   folders: [
-    { id: 'f1', name: 'Q2 Planning', color: '#c17f3e' },
-    { id: 'f2', name: 'Product Redesign', color: '#7c6faa' },
-    { id: 'f3', name: 'Client Onboarding', color: '#2e7d52' }
+    { id: 'f1', name: 'Q2 Planning', color: '#3B5244' },
+    { id: 'f2', name: 'Product Redesign', color: '#8B3A3A' },
+    { id: 'f3', name: 'Client Onboarding', color: '#A8842C' }
   ],
   notes: [
     {
@@ -86,7 +87,7 @@ function renderFolders() {
   const el = document.getElementById('folderList');
   const allCount = state.notes.length;
   let html = `<div class="folder-item ${!state.activeFolder ? 'active' : ''}" onclick="selectFolder(null)">
-    <div class="folder-dot" style="background:#888"></div>
+    <div class="folder-dot" style="background:var(--muted)"></div>
     <span class="folder-name">All notes</span>
     <span class="folder-count">${allCount}</span>
   </div>`;
@@ -107,7 +108,6 @@ function renderTopbar() {
   const badge = document.getElementById('topbarBadge');
   const filtered = getFilteredNotes();
   badge.textContent = filtered.length + (filtered.length === 1 ? ' note' : ' notes');
-  badge.style.background = f ? f.color : 'var(--accent)';
 }
 
 function getFilteredNotes() {
@@ -129,7 +129,7 @@ function renderNoteList() {
   const notes = getFilteredNotes();
   const el = document.getElementById('noteCards');
   if (!notes.length) {
-    el.innerHTML = `<div class="empty-list"><div style="font-size:28px;opacity:.3">🗒</div><p>${state.searchQuery ? 'No results found' : 'No notes yet'}</p></div>`;
+    el.innerHTML = `<div class="empty-list"><div class="empty-glyph">◆</div><p>${state.searchQuery ? 'No notes match your search' : 'No notes here yet'}</p></div>`;
     return;
   }
   el.innerHTML = notes.map(n => {
@@ -137,7 +137,7 @@ function renderNoteList() {
     const open = n.actions.filter(a => !a.done).length;
     return `<div class="note-card ${state.activeNote === n.id ? 'active' : ''}" onclick="selectNote('${n.id}')">
       <div class="note-card-title">${esc(n.title)}</div>
-      <div class="note-card-meta">${formatDate(n.date)}${f ? ' · <span style="color:'+f.color+'">'+esc(f.name)+'</span>' : ''}${open ? ' · '+open+' open' : ''}</div>
+      <div class="note-card-meta">${formatDate(n.date)}${f ? ' · <span class="meta-proj"><i style="background:'+f.color+'"></i>'+esc(f.name)+'</span>' : ''}${open ? ' · <span class="meta-open">'+open+' open</span>' : ''}</div>
       <div class="note-card-preview">${esc(n.body)}</div>
     </div>`;
   }).join('');
@@ -237,6 +237,10 @@ function addAction() {
 function toggleAction(i) {
   editActions[i].done = !editActions[i].done;
   renderActions();
+  if (editActions[i].done) {
+    const box = document.querySelectorAll('#actionList .action-checkbox')[i];
+    if (box) box.classList.add('pop');
+  }
 }
 
 function editAction(i, field, val) {
@@ -306,6 +310,10 @@ function showForm(isNew) {
   document.getElementById('detailEmpty').style.display = 'none';
   document.getElementById('detailForm').style.display = 'flex';
   document.getElementById('aiPanel').style.display = 'block';
+  const sheet = document.getElementById('sheet');
+  sheet.classList.remove('rise');
+  void sheet.offsetWidth; // restart the rise animation
+  sheet.classList.add('rise');
 }
 
 function showEmpty() {
@@ -491,7 +499,33 @@ function mobileBack() {
   render();
 }
 
+/* ── Theme ── */
+function syncThemeIcons() {
+  const dark = document.documentElement.dataset.theme === 'dark';
+  document.getElementById('iconMoon').style.display = dark ? 'none' : 'block';
+  document.getElementById('iconSun').style.display = dark ? 'block' : 'none';
+}
+
+function toggleTheme() {
+  const root = document.documentElement;
+  const next = root.dataset.theme === 'dark' ? 'light' : 'dark';
+  root.dataset.theme = next;
+  try { localStorage.setItem('afterword_theme', next); } catch(e) {}
+  syncThemeIcons();
+  const btn = document.getElementById('themeToggle');
+  btn.classList.remove('spun');
+  void btn.offsetWidth;
+  btn.classList.add('spun');
+}
+
+syncThemeIcons();
 render();
+if (isMobile()) mobileShowNotes();
+
+// stagger the note list in on first paint only
+const noteCardsEl = document.getElementById('noteCards');
+noteCardsEl.classList.add('intro');
+setTimeout(() => noteCardsEl.classList.remove('intro'), 1000);
 
 // Expose functions to global scope (required for onclick attributes with type="module")
 window.selectFolder = selectFolder;
@@ -517,3 +551,4 @@ window.openSidebar = openSidebar;
 window.closeSidebar = closeSidebar;
 window.mobileShowNotes = mobileShowNotes;
 window.mobileBack = mobileBack;
+window.toggleTheme = toggleTheme;

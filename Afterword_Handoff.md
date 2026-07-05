@@ -21,7 +21,7 @@ Afterword is a personal meeting notes app that solves a specific problem: notes 
 | Layer | Technology |
 |---|---|
 | Frontend | Static HTML/CSS/JS (three files: `afterword.html`, `styles.css`, `app.js`) — vanilla JS, no frameworks, no build step |
-| Styling | Custom CSS (no Tailwind/Bootstrap), DM Serif Display + DM Sans fonts |
+| Styling | Custom CSS (no Tailwind/Bootstrap), Plus Jakarta Sans + JetBrains Mono fonts (Vesatile brand system, light + dark themes) |
 | Database | None currently. Previously Firebase Firestore — removed; a fresh Firebase project will be set up later (see Firebase status note above and Section 6) |
 | Storage | Browser `localStorage` only (key: `afterword_v1`, migrated one-time from the old `meetingmind_v1` key) — this is the sole data store right now |
 | AI | Anthropic Claude API, called directly from the browser (`claude-sonnet-4-20250514`) |

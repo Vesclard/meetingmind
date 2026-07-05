@@ -1,10 +1,16 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Afterword</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+<title>Afterword — by Vesatile</title>
+<meta name="theme-color" content="#3B5244" />
+<script>
+  try { document.documentElement.dataset.theme = localStorage.getItem('afterword_theme') || 'light'; } catch(e) {}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -14,23 +20,32 @@
 <!-- Sidebar -->
 <aside class="sidebar" id="sidebar">
   <div class="sidebar-header">
-    <div class="logo">After<span>word</span></div>
+    <div class="logo">
+      <svg class="v-mark" viewBox="0 0 100 100" aria-hidden="true">
+        <polygon class="stroke" points="10,12 30,12 50,62 70,12 90,12 60,88 40,88"/>
+      </svg>
+      <div class="logo-text">
+        <div class="logo-name">AFTERWORD</div>
+        <div class="logo-byline">by Vesatile</div>
+      </div>
+    </div>
   </div>
   <div class="sidebar-search">
     <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
     <input id="searchInput" placeholder="Search notes..." oninput="handleSearch()" />
   </div>
   <div class="sidebar-section">
-    Projects
+    <span>Projects</span>
     <button class="add-folder-btn" onclick="openAddFolder()" title="Add project">+</button>
   </div>
   <div class="folder-list" id="folderList"></div>
   <div class="sidebar-footer">
-    <button class="new-note-btn" onclick="newNote()">+ New meeting note</button>
+    <button class="new-note-btn btn-sheen" onclick="newNote()">+ New meeting note</button>
     <div class="io-row">
       <button class="io-btn" onclick="exportData()" title="Export all notes as JSON backup">↓ Export</button>
       <label class="io-btn" title="Import notes from a JSON backup">↑ Import<input type="file" accept=".json" onchange="importData(event)" style="display:none;" /></label>
     </div>
+    <div class="sidebar-credit">◆ Less effort than you think ◆</div>
   </div>
 </aside>
 
@@ -39,7 +54,11 @@
   <div class="topbar">
     <div class="topbar-title" id="topbarTitle">All notes</div>
     <span class="sync-status" id="syncStatus"></span>
-    <span class="topbar-badge" id="topbarBadge" style="background:var(--accent)"></span>
+    <span class="topbar-badge" id="topbarBadge"></span>
+    <button id="themeToggle" onclick="toggleTheme()" aria-label="Toggle light and dark theme">
+      <svg id="iconMoon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      <svg id="iconSun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="display:none"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+    </button>
   </div>
 
   <div class="workspace">
@@ -52,46 +71,59 @@
     <!-- Detail -->
     <div class="detail" id="detailPanel">
       <div class="detail-empty" id="detailEmpty">
-        <div class="detail-empty-icon">📋</div>
-        <p>Select a note or create a new one</p>
+        <svg class="v-empty" viewBox="0 0 100 100" aria-hidden="true">
+          <polygon class="stroke" points="10,12 30,12 50,62 70,12 90,12 60,88 40,88"/>
+        </svg>
+        <div class="empty-eyebrow">Meeting notes</div>
+        <h2 class="empty-title">Every meeting deserves an afterword.</h2>
+        <p class="empty-lede">Select a note from the list, or start a new one.</p>
+        <button class="empty-new-btn btn-sheen" onclick="newNote()">New meeting note</button>
       </div>
 
       <div id="detailForm" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
         <div class="detail-content" id="detailContent">
           <button class="mobile-back-btn" onclick="mobileBack()">← Back to notes</button>
-          <div id="assignPrompt" class="assign-prompt" style="display:none;">
-            <span class="assign-prompt-icon">📁</span>
-            <span>This note has no project. Assign one:</span>
-            <select id="assignSelect" onchange="assignFolder()"></select>
+
+          <div class="sheet" id="sheet">
+            <span class="corner tl"></span><span class="corner tr"></span>
+            <span class="corner bl"></span><span class="corner br"></span>
+
+            <div id="assignPrompt" class="assign-prompt" style="display:none;">
+              <span class="assign-prompt-icon">◆</span>
+              <span>This note has no project. Assign one:</span>
+              <select id="assignSelect" onchange="assignFolder()"></select>
+            </div>
+
+            <div class="sheet-head">Meeting record</div>
+
+            <input class="note-title-input" id="noteTitle" placeholder="Meeting title..." />
+
+            <div class="meta-row">
+              <div class="meta-field">
+                <span class="meta-label">Date</span>
+                <input type="date" id="noteDate" />
+              </div>
+              <div class="meta-field">
+                <span class="meta-label">Attendees</span>
+                <input type="text" id="noteAttendees" placeholder="e.g. Alice, Bob" />
+              </div>
+              <div class="meta-field">
+                <span class="meta-label">Project</span>
+                <select id="noteFolder" onchange="onFolderSelectChange()"></select>
+              </div>
+            </div>
+
+            <div class="section-divider">Notes</div>
+            <textarea class="notes-textarea" id="noteBody" placeholder="What was discussed?"></textarea>
+
+            <div class="section-divider">Action items</div>
+            <div class="action-list" id="actionList"></div>
+            <button class="add-action-btn" onclick="addAction()">+ Add action item</button>
           </div>
-
-          <input class="note-title-input" id="noteTitle" placeholder="Meeting title..." />
-
-          <div class="meta-row">
-            <div class="meta-field">
-              <span class="meta-label">Date</span>
-              <input type="date" id="noteDate" />
-            </div>
-            <div class="meta-field">
-              <span class="meta-label">Attendees</span>
-              <input type="text" id="noteAttendees" placeholder="e.g. Alice, Bob" style="min-width:140px;" />
-            </div>
-            <div class="meta-field">
-              <span class="meta-label">Project</span>
-              <select id="noteFolder" onchange="onFolderSelectChange()"></select>
-            </div>
-          </div>
-
-          <div class="section-divider">Notes</div>
-          <textarea class="notes-textarea" id="noteBody" placeholder="What was discussed?"></textarea>
-
-          <div class="section-divider">Action items</div>
-          <div class="action-list" id="actionList"></div>
-          <button class="add-action-btn" onclick="addAction()">+ Add action item</button>
         </div>
 
         <div class="save-bar">
-          <button class="save-btn" onclick="saveNote()">Save note</button>
+          <button class="save-btn btn-sheen" onclick="saveNote()">Save note</button>
           <span class="save-hint" id="saveHint"></span>
           <button class="delete-btn" onclick="deleteNote()" id="deleteBtn" style="display:none;">Delete</button>
         </div>
@@ -101,14 +133,15 @@
       <div class="ai-panel" id="aiPanel" style="display:none;">
         <div class="ai-toggle" onclick="toggleAi()">
           <div class="ai-dot"></div>
-          AI assistant — ask anything across your notes
+          <span class="ai-label">Ask your notes</span>
+          <span class="ai-sub">AI assistant across every meeting</span>
           <span class="ai-chevron" id="aiChevron">▼</span>
         </div>
         <div class="ai-body" id="aiBody">
           <div class="ai-response" id="aiResponse">Ask me something like "what was decided in the last planning meeting?" or "who owns the design task?"</div>
           <div class="ai-input-row">
             <input class="ai-input" id="aiInput" placeholder="Ask a question about your notes..." onkeydown="if(event.key==='Enter')askAi()" />
-            <button class="ai-ask-btn" id="aiBtn" onclick="askAi()">Ask</button>
+            <button class="ai-ask-btn btn-sheen" id="aiBtn" onclick="askAi()">Ask</button>
           </div>
         </div>
       </div>
@@ -119,12 +152,13 @@
 <!-- Folder modal -->
 <div class="modal-overlay" id="folderModal">
   <div class="modal">
-    <h3>New project</h3>
+    <div class="modal-eyebrow">New project</div>
+    <h3>Name the project</h3>
     <p>Create a folder to organise related meeting notes together.</p>
     <input id="folderNameInput" placeholder="e.g. Website Redesign" onkeydown="if(event.key==='Enter')confirmAddFolder()" />
     <div class="modal-actions">
       <button class="modal-cancel" onclick="closeModal('folderModal')">Cancel</button>
-      <button class="modal-confirm" onclick="confirmAddFolder()">Create</button>
+      <button class="modal-confirm btn-sheen" onclick="confirmAddFolder()">Create project</button>
     </div>
   </div>
 </div>
