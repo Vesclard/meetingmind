@@ -4,7 +4,7 @@
 **Status:** Live, working prototype deployed to production
 **Owner:** Vesclard (solo developer)
 **Note:** This app was previously named "MeetingMind" during development. It has been rebranded to **Afterword** — filename, in-app branding, `localStorage` key, export filename, and the GitHub repo name are all done. Only the Firebase project ID (`meetingmind-af171`) still references the old name, permanently, by design — see Section 10 for the current rebrand status.
-**Firebase status:** Firebase/Firestore is **reconnected** as of this update, on a brand-new project (`afterword-53cd7`, not the old `meetingmind-af171`). Auth is Google Sign-In only; Firestore rules require `request.auth != null`. The app now requires sign-in and Firestore is the source of truth — `localStorage` is used only for small UI prefs (theme, sidebar collapsed state), not note data. See Section 6.
+**Firebase status:** Firebase/Firestore is **reconnected** as of this update, on a brand-new project (`afterword-53cd7`, not the old `meetingmind-af171`). Auth is Google Sign-In only; Firestore rules scope each user to their own `users/{uid}` document (`request.auth.uid == uid`) — not just "any authenticated user," which was a real bug in an earlier version of this setup (see Section 6). The app now requires sign-in and Firestore is the source of truth — `localStorage` is used only for small UI prefs (theme, sidebar collapsed state), not note data. See Section 6.
 
 ---
 
@@ -85,7 +85,18 @@ Firebase/Firestore has been **reconnected**, on a fresh project set up from scra
 
 - **New project:** `afterword-53cd7` (Firebase Console → Project Settings for the full `firebaseConfig`, embedded directly in `app.js` — the web API key is not secret; it's not a credential, just a client identifier, and access is governed entirely by the Firestore rules and auth below).
 - **Auth:** Firebase Authentication, Google Sign-In only. The app is gated behind sign-in — no anonymous/offline mode. `app.js` shows a full-screen sign-in overlay (`#signinScreen`) until `onAuthStateChanged` reports a signed-in user.
-- **Security rules:** `allow read, write: if request.auth != null;` — no time-cutoff gate, no open access. This replaces the old open/time-cutoff rules that were the top security gap in earlier versions of this doc.
+- **Security rules:**
+  ```
+  rules_version = '2';
+  service cloud.firestore {
+    match /databases/{database}/documents {
+      match /users/{uid} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+    }
+  }
+  ```
+  No time-cutoff gate, no open access — and scoped per-document to `request.auth.uid == uid`, not just "any authenticated user." An earlier version of this setup used an unscoped `match /{document=**} { allow read, write: if request.auth != null; }` rule, which let *any* signed-in Google account read/write *every* user's document, not just their own — effectively as open as the old `meetingmind-af171` rules, just with a Google sign-in speed bump in front. That was caught and fixed before the app saw real use with the vulnerable rule live; the scoped version above is what's actually deployed.
 - **Data shape:** one Firestore document per user at `users/{uid}`, holding `{ folders: [...], notes: [...] }` — the same shape the old `localStorage` blob used, just moved server-side. `loadUserData(uid)` reads it on sign-in; if no doc exists yet (first-ever login), it seeds `DEFAULT_DATA` and writes it. `saveData()` writes the whole document after every mutation (`saveNote`, `deleteNote`, `confirmAddFolder`, `importData`).
 - **No migration from the old `localStorage` data.** This was a deliberate choice when Firebase was reconnected — Firestore started empty rather than uploading whatever was sitting in the browser's `afterword_v1` key. Any notes that were only ever in `localStorage` before this change are not automatically in Firestore; use Export (while on the old version) / Import (once signed in) if old local notes need to be recovered.
 - **Error handling:** Firestore read/write failures don't throw silently — `loadUserData`/`saveData` catch errors and surface a toast (e.g. "⚠ Save failed — check your connection") rather than only `console.warn`. This addresses the old Priority 2 "add loading/error states" item for the parts of it that apply now that sync is back.
@@ -116,7 +127,7 @@ Firebase/Firestore has been **reconnected**, on a fresh project set up from scra
 ## 9. Suggested Next Steps for Improvement
 
 ### Priority 1 — Security & sync
-- **Set up a new Firebase project from scratch and wire Firestore back into `app.js`.** ✅ Completed. New project `afterword-53cd7`, Google Sign-In auth, `allow read, write: if request.auth != null;` rules — see Section 6.
+- **Set up a new Firebase project from scratch and wire Firestore back into `app.js`.** ✅ Completed. New project `afterword-53cd7`, Google Sign-In auth, Firestore rules scoped per-user via `request.auth.uid == uid` — see Section 6.
 - **Move the Claude API call server-side.** ✅ Completed. Implemented via the Vercel serverless function `/api/ask.js` and local endpoint mapping in `app.js`.
 
 ### Priority 2 — Reliability

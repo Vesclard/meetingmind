@@ -42,6 +42,6 @@ Every note belongs to exactly one folder; folders are the only categorization me
 
 **AI assistant** (`askAi`): serializes *all* notes into one context blob and sends them to the local `/api/ask` proxy, which injects the `ANTHROPIC_API_KEY` environment variable and calls the Anthropic API.
 
-**Security note**: Firestore rules require `request.auth != null`, and the only sign-in method is Google, so access is tied to the signed-in Google account rather than an open/public database. There is no cross-device conflict resolution yet — if the same note is edited on two devices, the last write silently wins (tracked in `Afterword_Handoff.md` Priority 2).
+**Security note**: Firestore rules scope each user to their own `users/{uid}` document via `request.auth.uid == uid` — not merely `request.auth != null`, which would let any signed-in Google account read/write every user's document (an earlier version of this setup had that bug; it's fixed in the deployed rules). There is no cross-device conflict resolution yet — if the same note is edited on two devices, the last write silently wins (tracked in `Afterword_Handoff.md` Priority 2).
 
 **Mobile layout**: single-column, driven by a `mobile-nav` bottom bar and `.hidden` class toggles on `.note-list`/`.detail-panel`, distinct from the desktop two/three-pane layout — check `isMobile()` (viewport ≤700px) and the `mobile*` functions before changing responsive behavior.
