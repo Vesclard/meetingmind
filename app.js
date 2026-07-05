@@ -584,6 +584,20 @@ try {
 
 const noteCardsEl = document.getElementById('noteCards');
 
+function resetLocalState() {
+  state.folders = [];
+  state.notes = [];
+  state.activeFolder = null;
+  state.activeNote = null;
+  state.isNew = false;
+  state.searchQuery = '';
+  editActions = [];
+  const searchInput = document.getElementById('searchInput');
+  if (searchInput) searchInput.value = '';
+  showEmpty();
+  render();
+}
+
 onAuthStateChanged(auth, async (user) => {
   currentUser = user;
   const screen = document.getElementById('signinScreen');
@@ -595,6 +609,11 @@ onAuthStateChanged(auth, async (user) => {
     screen.style.display = 'none';
     signOutBtn.style.display = '';
     signOutBtn.title = 'Sign out (' + (user.email || '') + ')';
+    // Wipe out whatever the previous account left in state/the detail panel
+    // before loading this account's own data — belt-and-suspenders on top
+    // of the sign-out reset below, so no stale note can ever survive a
+    // sign-out/sign-in cycle regardless of event timing.
+    resetLocalState();
     await loadUserData(user.uid);
     render();
     if (isMobile()) mobileShowNotes();
@@ -606,20 +625,7 @@ onAuthStateChanged(auth, async (user) => {
     lede.textContent = 'Sign in to access your notes.';
     googleBtn.style.display = '';
     signOutBtn.style.display = 'none';
-
-    // Clear the previous account's data out of state and the detail panel
-    // so the next signed-in account never sees a stale open note.
-    state.folders = [];
-    state.notes = [];
-    state.activeFolder = null;
-    state.activeNote = null;
-    state.isNew = false;
-    state.searchQuery = '';
-    editActions = [];
-    const searchInput = document.getElementById('searchInput');
-    if (searchInput) searchInput.value = '';
-    showEmpty();
-    render();
+    resetLocalState();
   }
 });
 
