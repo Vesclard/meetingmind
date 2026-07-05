@@ -13,17 +13,17 @@ Read `Afterword_Handoff.md` in full before making changes — it's the authorita
 ## Repo structure
 
 Three static files, plus serverless configuration:
-- `afterword.html` — markup only: sidebar, note list, detail panel, AI panel, folder modal, mobile bottom nav, plus `<link>`/`<script src>` tags pulling in the other two files.
+- `index.html` — markup only: sidebar, note list, detail panel, AI panel, folder modal, mobile bottom nav, plus `<link>`/`<script src>` tags pulling in the other two files.
 - `styles.css` — all CSS, including the `@media (max-width: 700px)` mobile layout.
 - `app.js` — entire app logic, loaded as `<script type="module" src="app.js">`. Calls server-side `/api/ask` for the AI assistant.
-- `vercel.json` — Vercel configuration: rewrites `/` to `/afterword.html`.
+- `vercel.json` — Vercel configuration: enables clean URLs.
 - `/api/ask.js` — Vercel Node.js Serverless Function proxying Anthropic API calls.
 
 No package.json, no dependencies to install, no test suite.
 
 ## Development workflow
 
-There is no local dev server, linter, bundler, or test command — none exist in this repo and none should be introduced casually. Iteration is: edit `afterword.html`/`styles.css`/`app.js` directly, then open `afterword.html` in a browser to check behavior. Deployment is via GitHub → Vercel auto-deploy (static files, zero build config). The user's environment historically had no Node/npm/Firebase-CLI available, so avoid proposing CLI-based tooling or build steps unless you've confirmed that constraint no longer holds.
+There is no local dev server, linter, bundler, or test command — none exist in this repo and none should be introduced casually. Iteration is: edit `index.html`/`styles.css`/`app.js` directly, then open `index.html` in a browser to check behavior. Deployment is via GitHub → Vercel auto-deploy (static files, zero build config). The user's environment historically had no Node/npm/Firebase-CLI available, so avoid proposing CLI-based tooling or build steps unless you've confirmed that constraint no longer holds.
 
 ## Architecture
 

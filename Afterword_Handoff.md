@@ -20,7 +20,7 @@ Afterword is a personal meeting notes app that solves a specific problem: notes 
 
 | Layer | Technology |
 |---|---|
-| Frontend | Static HTML/CSS/JS (three files: `afterword.html`, `styles.css`, `app.js`) — vanilla JS, no frameworks, no build step |
+| Frontend | Static HTML/CSS/JS (three files: `index.html`, `styles.css`, `app.js`) — vanilla JS, no frameworks, no build step |
 | Styling | Custom CSS (no Tailwind/Bootstrap), Plus Jakarta Sans + JetBrains Mono fonts (Vesatile brand system, light + dark themes) |
 | Database | None currently. Previously Firebase Firestore — removed; a fresh Firebase project will be set up later (see Firebase status note above and Section 6) |
 | Storage | Browser `localStorage` only (key: `afterword_v1`, migrated one-time from the old `meetingmind_v1` key) — this is the sole data store right now |
@@ -34,13 +34,13 @@ Afterword is a personal meeting notes app that solves a specific problem: notes 
 ## 3. File Structure
 
 No-build static structure:
-- `afterword.html` — markup only: sidebar, note list, detail panel, AI panel, modals, mobile bottom nav. Links to the two files below via `<link rel="stylesheet" href="styles.css">` and `<script type="module" src="app.js">`.
+- `index.html` — markup only: sidebar, note list, detail panel, AI panel, modals, mobile bottom nav. Links to the two files below via `<link rel="stylesheet" href="styles.css">` and `<script type="module" src="app.js">`. (Renamed from `afterword.html` to `index.html` for native Vercel and local browser hosting compatibility).
 - `styles.css` — all CSS, including a `@media (max-width: 700px)` block for mobile.
 - `app.js` — all app logic and state management. Calls `/api/ask` for the AI assistant.
-- `vercel.json` — Vercel routing configuration: rewrites `/` to `/afterword.html` (avoiding index.html redirect stubs).
+- `vercel.json` — Vercel configuration: enables clean URLs.
 - `/api/ask.js` — Node.js Serverless Function that proxies Claude API requests and injects the `ANTHROPIC_API_KEY` securely.
 
-**Important quirk:** Because `app.js` is loaded as `type="module"`, all functions called from inline `onclick="..."` HTML attributes in `afterword.html` must be explicitly exposed via `window.functionName = functionName` at the bottom of `app.js`. If a new function is added and referenced from HTML, it **must** be added to this list or clicks will silently fail.
+**Important quirk:** Because `app.js` is loaded as `type="module"`, all functions called from inline `onclick="..."` HTML attributes in `index.html` must be explicitly exposed via `window.functionName = functionName` at the bottom of `app.js`. If a new function is added and referenced from HTML, it **must** be added to this list or clicks will silently fail.
 
 ---
 
@@ -86,7 +86,7 @@ Firebase/Firestore integration has been **removed from the app entirely** — no
 - The old Firestore setup (project `meetingmind-af171`) shipped with open, time-cutoff-gated security rules (`allow read, write: if request.time < timestamp.date(2026, 4, 30)`) — anyone with the project's public config could read/write the database. This was flagged as the top security gap in earlier versions of this doc.
 - Rather than patch that project, the plan is to **set up Firebase from scratch** later — a new project, proper security rules from day one (likely Firebase Authentication + `allow read, write: if request.auth != null;`), and reconnect the app to it.
 - Until that happens, the app runs on **`localStorage` only** (see Sections 2 and 5). This means: single-device, no backup beyond manual Export, and no login/auth surface at all currently — there's nothing to secure because there's no server-side data store.
-- When Firebase setup resumes: get the new project's `firebaseConfig` from the Firebase Console (Project Settings → your web app), decide on the security rules approach, then wire both back into `app.js`. The old Firestore read/write functions are still visible in git history (`git log -p -- afterword.html app.js`) as a reference for the previous implementation shape, though the new version should ship with real auth from the start rather than reproducing the old open-rules approach.
+- When Firebase setup resumes: get the new project's `firebaseConfig` from the Firebase Console (Project Settings → your web app), decide on the security rules approach, then wire both back into `app.js`. The old Firestore read/write functions are still visible in git history (`git log -p -- index.html app.js`) as a reference for the previous implementation shape, though the new version should ship with real auth from the start rather than reproducing the old open-rules approach.
 
 ---
 
@@ -95,7 +95,7 @@ Firebase/Firestore integration has been **removed from the app entirely** — no
 - **Firebase project:** none currently connected — old project `meetingmind-af171` is disconnected from the app pending a fresh Firebase setup (Section 6)
 - **Repo:** GitHub, repository name `afterword`, public visibility
 - **Hosting:** Vercel, imported directly from the GitHub repo
-- **Deploy flow:** Edit `afterword.html` / `styles.css` / `app.js` locally → commit to GitHub → Vercel auto-redeploys on push
+- **Deploy flow:** Edit `index.html` / `styles.css` / `app.js` locally → commit to GitHub → Vercel auto-redeploys on push
 - **No Firebase Hosting or Firebase CLI used** — user's work PC has historically not allowed local installs, so the workflow has been web-only (GitHub web upload + Vercel import), no `npm`, `node`, or `firebase-tools` involved. (Note: some recent iteration used the `git` CLI directly rather than the GitHub web UI — confirm with the user which workflow is current before assuming either.)
 
 ---
@@ -139,7 +139,7 @@ Firebase/Firestore integration has been **removed from the app entirely** — no
 The product is now called **Afterword**. Status as of this update:
 
 - **In-app branding** — ✅ Done. Sidebar logo now renders "After**word**" and the `<title>` tag is "Afterword".
-- **Filename** — ✅ Done. Renamed `meetingmind.html` → `afterword.html` (via `git mv`, history preserved).
+- **Filename** — ✅ Done. Renamed `meetingmind.html` → `index.html` (originally renamed to `afterword.html`, but later changed to `index.html` for clean Vercel hosting and native root path resolution).
 - **`localStorage` key** — ✅ Done. Now `afterword_v1`. `loadFromLocalStorage()` does a one-time migration: if the new key is empty, it reads the old `meetingmind_v1` key, copies it forward, and deletes the old key. No user data is lost.
 - **Export backup filename** — ✅ Done. Downloads are now named `afterword-backup-<date>.json` instead of `meetingmind-backup-<date>.json`.
 - **Firebase project ID** — superseded. The app no longer connects to Firebase at all (Section 6); the old `meetingmind-af171` project is disconnected pending a brand-new Firebase project being set up from scratch, so its name is now moot rather than something to migrate.
@@ -154,7 +154,7 @@ The product is now called **Afterword**. Status as of this update:
 
 If picking this project up cold:
 1. Read this document fully before touching code.
-2. Open `app.js` — this is the entire application logic. `afterword.html` is markup only; `styles.css` is all styling.
+2. Open `app.js` — this is the entire application logic. `index.html` is markup only; `styles.css` is all styling.
 3. Note the app currently has **no Firebase/Firestore** — it's `localStorage`-only, single-device, by deliberate interim choice (Section 6). Don't "fix" this by re-adding the old Firestore integration; a fresh Firebase setup is planned and should ship with real auth from the start.
 4. Confirm whether the user still lacks local dev tooling before suggesting any CLI-based approach.
 5. Treat Priority 1 items (fresh Firebase setup + server-side Claude API call) as the most urgent unless the user explicitly says otherwise.
