@@ -4,7 +4,7 @@
 **Status:** Live, working prototype deployed to production
 **Owner:** Vesclard (solo developer)
 **Note:** This app was previously named "MeetingMind" during development. It has been rebranded to **Afterword** — filename, in-app branding, `localStorage` key, export filename, and the GitHub repo name are all done. Only the Firebase project ID (`meetingmind-af171`) still references the old name, permanently, by design — see Section 10 for the current rebrand status.
-**Firebase status:** Firebase/Firestore has been **intentionally removed** from the app — the plan is to set up a fresh Firebase project and deployment from scratch (rather than keep the old `meetingmind-af171` project) at a later date. Until that happens, the app is **`localStorage`-only**: single-device, no cloud sync, no cross-device access. See Section 6.
+**Firebase status:** Firebase/Firestore is **reconnected** as of this update, on a brand-new project (`afterword-53cd7`, not the old `meetingmind-af171`). Auth is Google Sign-In only; Firestore rules require `request.auth != null`. The app now requires sign-in and Firestore is the source of truth — `localStorage` is used only for small UI prefs (theme, sidebar collapsed state), not note data. See Section 6.
 
 ---
 
@@ -22,8 +22,8 @@ Afterword is a personal meeting notes app that solves a specific problem: notes 
 |---|---|
 | Frontend | Static HTML/CSS/JS (three files: `index.html`, `styles.css`, `app.js`) — vanilla JS, no frameworks, no build step |
 | Styling | Custom CSS (no Tailwind/Bootstrap), Plus Jakarta Sans + JetBrains Mono fonts (Vesatile brand system, light + dark themes) |
-| Database | None currently. Previously Firebase Firestore — removed; a fresh Firebase project will be set up later (see Firebase status note above and Section 6) |
-| Storage | Browser `localStorage` only (key: `afterword_v1`, migrated one-time from the old `meetingmind_v1` key) — this is the sole data store right now |
+| Database | Firebase Firestore, project `afterword-53cd7` — one document per user at `users/{uid}` holding `{ folders, notes }` (see Section 6) |
+| Storage | Firestore is the source of truth for note data, gated behind Google Sign-In. `localStorage` is still used for small UI prefs only (`afterword_theme`, `afterword_sidebar_collapsed`) — no note data lives there anymore |
 | AI | Anthropic Claude API, called directly from the browser (`claude-sonnet-4-20250514`) |
 | Hosting | Vercel, deployed via a GitHub repository (`afterword`) |
 
@@ -81,18 +81,21 @@ note = {
 
 ## 6. Firebase Status
 
-Firebase/Firestore integration has been **removed from the app entirely** — no `firebaseConfig`, no Firestore reads/writes, `app.js` has zero Firebase dependencies. This was a deliberate interim step, not an accident:
+Firebase/Firestore has been **reconnected**, on a fresh project set up from scratch — not a patch of the old `meetingmind-af171` project:
 
-- The old Firestore setup (project `meetingmind-af171`) shipped with open, time-cutoff-gated security rules (`allow read, write: if request.time < timestamp.date(2026, 4, 30)`) — anyone with the project's public config could read/write the database. This was flagged as the top security gap in earlier versions of this doc.
-- Rather than patch that project, the plan is to **set up Firebase from scratch** later — a new project, proper security rules from day one (likely Firebase Authentication + `allow read, write: if request.auth != null;`), and reconnect the app to it.
-- Until that happens, the app runs on **`localStorage` only** (see Sections 2 and 5). This means: single-device, no backup beyond manual Export, and no login/auth surface at all currently — there's nothing to secure because there's no server-side data store.
-- When Firebase setup resumes: get the new project's `firebaseConfig` from the Firebase Console (Project Settings → your web app), decide on the security rules approach, then wire both back into `app.js`. The old Firestore read/write functions are still visible in git history (`git log -p -- index.html app.js`) as a reference for the previous implementation shape, though the new version should ship with real auth from the start rather than reproducing the old open-rules approach.
+- **New project:** `afterword-53cd7` (Firebase Console → Project Settings for the full `firebaseConfig`, embedded directly in `app.js` — the web API key is not secret; it's not a credential, just a client identifier, and access is governed entirely by the Firestore rules and auth below).
+- **Auth:** Firebase Authentication, Google Sign-In only. The app is gated behind sign-in — no anonymous/offline mode. `app.js` shows a full-screen sign-in overlay (`#signinScreen`) until `onAuthStateChanged` reports a signed-in user.
+- **Security rules:** `allow read, write: if request.auth != null;` — no time-cutoff gate, no open access. This replaces the old open/time-cutoff rules that were the top security gap in earlier versions of this doc.
+- **Data shape:** one Firestore document per user at `users/{uid}`, holding `{ folders: [...], notes: [...] }` — the same shape the old `localStorage` blob used, just moved server-side. `loadUserData(uid)` reads it on sign-in; if no doc exists yet (first-ever login), it seeds `DEFAULT_DATA` and writes it. `saveData()` writes the whole document after every mutation (`saveNote`, `deleteNote`, `confirmAddFolder`, `importData`).
+- **No migration from the old `localStorage` data.** This was a deliberate choice when Firebase was reconnected — Firestore started empty rather than uploading whatever was sitting in the browser's `afterword_v1` key. Any notes that were only ever in `localStorage` before this change are not automatically in Firestore; use Export (while on the old version) / Import (once signed in) if old local notes need to be recovered.
+- **Error handling:** Firestore read/write failures don't throw silently — `loadUserData`/`saveData` catch errors and surface a toast (e.g. "⚠ Save failed — check your connection") rather than only `console.warn`. This addresses the old Priority 2 "add loading/error states" item for the parts of it that apply now that sync is back.
+- **Still open:** conflict handling for concurrent edits across devices (last write still wins — see Section 9, Priority 2) and a "Reset app" button.
 
 ---
 
 ## 7. Deployment Setup
 
-- **Firebase project:** none currently connected — old project `meetingmind-af171` is disconnected from the app pending a fresh Firebase setup (Section 6)
+- **Firebase project:** `afterword-53cd7`, connected (Section 6). The old `meetingmind-af171` project remains permanently disconnected/unused.
 - **Repo:** GitHub, repository name `afterword`, public visibility
 - **Hosting:** Vercel, imported directly from the GitHub repo
 - **Deploy flow:** Edit `index.html` / `styles.css` / `app.js` locally → commit to GitHub → Vercel auto-redeploys on push
@@ -103,7 +106,7 @@ Firebase/Firestore integration has been **removed from the app entirely** — no
 ## 8. Known Constraints / Things a New Agent Should Know
 
 1. **No local dev environment (historically).** The user's work PC has not allowed installing Node, the Firebase CLI, or other local tooling. Confirm this constraint still holds before suggesting CLI-based workflows or a build step.
-2. **No cloud sync currently.** Firebase/Firestore was removed (Section 6); the app is `localStorage`-only, single-device, no login system. This is intentional and temporary, not a regression to silently "fix" — wait for the user's go-ahead on the fresh Firebase setup rather than reintroducing the old integration.
+2. **Cloud sync is back.** Firebase/Firestore is reconnected on the new `afterword-53cd7` project, gated behind Google Sign-In (Section 6). The app now requires sign-in — there's no offline/anonymous mode. `localStorage` is UI-prefs-only now, not a data store.
 3. **The Claude API key is secure** — the AI assistant calls the server-side `/api/ask.js` proxy. The `ANTHROPIC_API_KEY` must be configured as an environment variable in Vercel, keeping it secret.
 4. **`type="module"` + inline `onclick`** requires the `window.fn = fn` exposure pattern described in Section 3. Easy to forget when adding features. Applies to `app.js` regardless of it being an external file rather than inline.
 5. Categorization is **folders only** (by deliberate user choice) — do not reintroduce tags/auto-categorization without checking with the user first.
@@ -112,14 +115,14 @@ Firebase/Firestore integration has been **removed from the app entirely** — no
 
 ## 9. Suggested Next Steps for Improvement
 
-### Priority 1 — Security & sync (blocked on fresh Firebase setup)
-- **Set up a new Firebase project from scratch** (not the old `meetingmind-af171`) and wire Firestore back into `app.js`. Do this with real security from day one — e.g. Firebase Authentication (Google Sign-In) plus `allow read, write: if request.auth != null;` — rather than reintroducing the old open/time-cutoff rules.
+### Priority 1 — Security & sync
+- **Set up a new Firebase project from scratch and wire Firestore back into `app.js`.** ✅ Completed. New project `afterword-53cd7`, Google Sign-In auth, `allow read, write: if request.auth != null;` rules — see Section 6.
 - **Move the Claude API call server-side.** ✅ Completed. Implemented via the Vercel serverless function `/api/ask.js` and local endpoint mapping in `app.js`.
 
 ### Priority 2 — Reliability
-- **Add conflict handling for concurrent edits.** Once cloud sync is back: if the same note is edited on two devices while offline, the last save would silently overwrite the other. Worth adding a simple `updatedAt` timestamp check with a warning if a conflict is detected.
-- **Add loading/error states for remote calls**, once Firestore is reconnected — don't just `console.warn` on failure; surface it to the user.
-- **Add a "Reset app" button** (mentioned but not yet built) to clear local (and, later, remote) data cleanly without needing DevTools.
+- **Add conflict handling for concurrent edits.** Now that cloud sync is back: if the same note is edited on two devices while offline, the last save still silently overwrites the other. Worth adding a simple `updatedAt` timestamp check with a warning if a conflict is detected. Still open.
+- **Add loading/error states for remote calls.** ✅ Partially done — `loadUserData`/`saveData` in `app.js` catch Firestore errors and surface a toast instead of only `console.warn`. Still open: a dedicated loading spinner during the sign-in/data-fetch window (currently just the "Checking your session…" sign-in screen text).
+- **Add a "Reset app" button** (mentioned but not yet built) to clear a user's Firestore document cleanly without needing the Firebase Console. Still open.
 
 ### Priority 3 — UX polish
 - **Autosave.** Currently requires an explicit "Save" click; a debounced autosave would remove friction and reduce the risk of losing edits.
@@ -155,9 +158,9 @@ The product is now called **Afterword**. Status as of this update:
 If picking this project up cold:
 1. Read this document fully before touching code.
 2. Open `app.js` — this is the entire application logic. `index.html` is markup only; `styles.css` is all styling.
-3. Note the app currently has **no Firebase/Firestore** — it's `localStorage`-only, single-device, by deliberate interim choice (Section 6). Don't "fix" this by re-adding the old Firestore integration; a fresh Firebase setup is planned and should ship with real auth from the start.
+3. Note the app now has **Firebase/Firestore reconnected** on project `afterword-53cd7`, gated behind Google Sign-In, with real security rules from day one (Section 6) — it is no longer `localStorage`-only. Don't remove this integration to "simplify" without checking with the user first.
 4. Confirm whether the user still lacks local dev tooling before suggesting any CLI-based approach.
-5. Treat Priority 1 items (fresh Firebase setup + server-side Claude API call) as the most urgent unless the user explicitly says otherwise.
+5. Priority 1 (fresh Firebase setup + server-side Claude API call) is now done — see Section 9. Treat Priority 2 (reliability: conflict handling, reset button) as the current focus unless the user says otherwise.
 6. Note the app is called **Afterword** now, not MeetingMind — see Section 10 before renaming any files or infrastructure.
 
 ---

@@ -15,6 +15,27 @@
 </head>
 <body>
 
+<!-- Sign-in gate -->
+<div class="signin-screen" id="signinScreen">
+  <div class="signin-card">
+    <svg class="v-mark signin-mark" viewBox="0 0 100 100" aria-hidden="true">
+      <polygon class="stroke" points="10,12 30,12 50,62 70,12 90,12 60,88 40,88"/>
+    </svg>
+    <div class="signin-title">Afterword</div>
+    <p class="signin-lede" id="signinLede">Checking your session…</p>
+    <button class="signin-google-btn btn-sheen" id="signinGoogleBtn" onclick="signInWithGoogle()" style="display:none;">
+      <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
+        <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.9 32.9 29.4 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 8 3l6-6C34.5 5.1 29.6 3 24 3 12.4 3 3 12.4 3 24s9.4 21 21 21 21-9.4 21-21c0-1.4-.1-2.7-.4-3.5z"/>
+        <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.1 18.9 12 24 12c3.1 0 5.8 1.1 8 3l6-6C34.5 5.1 29.6 3 24 3 16 3 9 7.6 6.3 14.7z"/>
+        <path fill="#4CAF50" d="M24 45c5.4 0 10.3-2 14-5.3l-6.5-5.4C29.5 35.9 26.9 37 24 37c-5.4 0-9.9-3.1-11.3-7.5l-6.6 5.1C9 40.3 16 45 24 45z"/>
+        <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.7 2.3-2.1 4.3-3.9 5.7l6.5 5.4C41.6 36.9 45 31.1 45 24c0-1.4-.1-2.7-.4-3.5z"/>
+      </svg>
+      Sign in with Google
+    </button>
+    <p class="signin-error" id="signinError"></p>
+  </div>
+</div>
+
 <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
 
 <!-- Sidebar -->
@@ -58,6 +79,7 @@
     <div class="topbar-title" id="topbarTitle">All notes</div>
     <span class="sync-status" id="syncStatus"></span>
     <span class="topbar-badge" id="topbarBadge"></span>
+    <button id="signOutBtn" class="signout-btn" onclick="signOutUser()" style="display:none;" title="Sign out">Sign out</button>
     <button id="themeToggle" onclick="toggleTheme()" aria-label="Toggle light and dark theme">
       <svg id="iconMoon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
       <svg id="iconSun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="display:none"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>

@@ -380,6 +380,88 @@ html { scrollbar-color: var(--line) transparent; scrollbar-width: thin; }
 @keyframes spin-toggle { to { transform: rotate(360deg); } }
 #themeToggle svg { width: 15px; height: 15px; }
 
+.signout-btn {
+  padding: 7px 14px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--muted);
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: border-color .2s ease, color .2s ease;
+}
+.signout-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── Sign-in gate ── */
+.signin-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  transition: background .35s ease;
+}
+
+.signin-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 40px 36px;
+  width: 320px;
+  max-width: calc(100vw - 40px);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.signin-mark { width: 40px; height: 40px; margin-bottom: 18px; }
+
+.signin-title {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -.01em;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+
+.signin-lede {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 24px;
+}
+
+.signin-google-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 20px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+}
+.signin-google-btn:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-color: var(--brand); }
+
+.signin-error {
+  font-size: 12px;
+  color: var(--danger);
+  margin-top: 14px;
+  min-height: 1em;
+}
+
 /* ── Note list + detail ── */
 .workspace {
   display: flex;

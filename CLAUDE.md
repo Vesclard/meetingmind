@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Afterword is a single-user personal meeting-notes app: structured notes organized by project folder, with search and an AI assistant over all notes. It is **not** a multi-tenant product — designed and built for one person's own use. The app was originally called "MeetingMind"; in-app branding, filename, `localStorage` key, export filename, and the GitHub repo name have all been rebranded to Afterword.
 
-The app previously synced to Firebase Firestore; that integration has been removed and the app is now **`localStorage`-only** (Firebase is planned to come back later as a from-scratch setup — see `Afterword_Handoff.md` for status). Don't reintroduce a Firestore/`firebaseConfig` dependency unless asked.
+The app syncs to Firebase Firestore, on a fresh project (`afterword-53cd7`) set up from scratch, gated behind Google Sign-In — not the old, insecure `meetingmind-af171` project. `localStorage` is now used only for small UI prefs (theme, sidebar collapsed state), not note data. See `Afterword_Handoff.md` Section 6 for full status.
 
 Read `Afterword_Handoff.md` in full before making changes — it's the authoritative, up-to-date handoff doc (tech stack, data model, known issues, priorities). Don't duplicate its contents here; this file only covers what a coding agent needs to act inside the codebase.
 
@@ -29,7 +29,7 @@ There is no local dev server, linter, bundler, or test command — none exist in
 
 **State**: a single in-memory `state` object (`folders`, `notes`, `activeFolder`, `activeNote`, `isNew`, `searchQuery`, `aiOpen`) plus a parallel `editActions` array used while editing a note's action items. There's no framework-level reactivity — every mutation is followed by an explicit `render()` call that re-renders folders, note list, and topbar via `innerHTML`.
 
-**Persistence is `localStorage`-only**: key `afterword_v1`, with a one-time migration that reads and clears the old `meetingmind_v1` key if present. If `localStorage` is empty, `DEFAULT_DATA` (hardcoded seed notes/folders) is used instead. Every save/delete/import writes to `localStorage` synchronously via `saveToLocalStorage()` — there is no remote sync of any kind right now. (Firebase Firestore sync used to exist here; it was intentionally removed and a fresh Firebase setup is planned later — see `Afterword_Handoff.md`.)
+**Persistence is Firestore-backed, gated behind Google Sign-In**: the app shows a full-screen sign-in overlay (`#signinScreen`) until `onAuthStateChanged` reports a signed-in user. Notes live in one Firestore document per user at `users/{uid}` (`{ folders, notes }`). `loadUserData(uid)` reads it on sign-in and seeds `DEFAULT_DATA` if the doc doesn't exist yet (first-ever login); `saveData()` writes the whole document after every mutation (called from `saveNote`/`deleteNote`/`confirmAddFolder`/`importData`), returning a boolean so callers can toast a "⚠ Save failed" message on failure instead of silently swallowing errors. `localStorage` is only used for UI prefs now (`afterword_theme`, `afterword_sidebar_collapsed`) — no note data lives there.
 
 **Critical quirk — inline `onclick` + ES module**: because the script is `type="module"`, its functions are scoped to the module and invisible to inline `onclick="..."` HTML handlers. Every function referenced from an `onclick`/`oninput`/`onchange`/`onkeydown` attribute must be explicitly assigned to `window` at the bottom of the script (see the `window.fn = fn` block). **If you add a function and wire it to an inline handler, you must add it to that list or the click will silently do nothing** — there's no error, it just fails quietly.
 
@@ -42,6 +42,6 @@ Every note belongs to exactly one folder; folders are the only categorization me
 
 **AI assistant** (`askAi`): serializes *all* notes into one context blob and sends them to the local `/api/ask` proxy, which injects the `ANTHROPIC_API_KEY` environment variable and calls the Anthropic API.
 
-**Security note**: with no Firestore, all data lives only in the browser's `localStorage` on whatever device the user is on — there's currently no cross-device sync at all. This is the tradeoff for pulling Firebase out; expect it to come back once Firebase is set up fresh (see `Afterword_Handoff.md`).
+**Security note**: Firestore rules require `request.auth != null`, and the only sign-in method is Google, so access is tied to the signed-in Google account rather than an open/public database. There is no cross-device conflict resolution yet — if the same note is edited on two devices, the last write silently wins (tracked in `Afterword_Handoff.md` Priority 2).
 
 **Mobile layout**: single-column, driven by a `mobile-nav` bottom bar and `.hidden` class toggles on `.note-list`/`.detail-panel`, distinct from the desktop two/three-pane layout — check `isMobile()` (viewport ≤700px) and the `mobile*` functions before changing responsive behavior.

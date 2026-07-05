@@ -1,8 +1,24 @@
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+
 // Muted-but-specific folder tones, derived from the Vesatile palette
 const FOLDER_COLORS = ['#3B5244','#8B3A3A','#A8842C','#4A6274','#6E5A7E','#31606B','#9C6B4E','#7A8581'];
 
-const STORAGE_KEY = 'afterword_v1';
-const OLD_STORAGE_KEY = 'meetingmind_v1'; // pre-rebrand key — migrated once in loadFromLocalStorage, then unused
+const firebaseConfig = {
+  apiKey: "AIzaSyD0y_PBPCN-yjyYXZv-y4NDSSUJRZlMIB0",
+  authDomain: "afterword-53cd7.firebaseapp.com",
+  projectId: "afterword-53cd7",
+  storageBucket: "afterword-53cd7.firebasestorage.app",
+  messagingSenderId: "827868119462",
+  appId: "1:827868119462:web:81fe16adc3d5aabd11cf67"
+};
+
+const firebaseApp = initializeApp(firebaseConfig);
+const auth = getAuth(firebaseApp);
+const db = getFirestore(firebaseApp);
+const googleProvider = new GoogleAuthProvider();
+let currentUser = null;
 
 const DEFAULT_DATA = {
   folders: [
@@ -42,31 +58,57 @@ const DEFAULT_DATA = {
   ]
 };
 
-function loadFromLocalStorage() {
+function userDocRef(uid) {
+  return doc(db, 'users', uid);
+}
+
+async function loadUserData(uid) {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
-    const oldRaw = localStorage.getItem(OLD_STORAGE_KEY);
-    if (oldRaw) {
-      localStorage.setItem(STORAGE_KEY, oldRaw);
-      localStorage.removeItem(OLD_STORAGE_KEY);
-      return JSON.parse(oldRaw);
+    const snap = await getDoc(userDocRef(uid));
+    if (snap.exists()) {
+      const data = snap.data();
+      state.folders = data.folders || [];
+      state.notes = data.notes || [];
+    } else {
+      state.folders = DEFAULT_DATA.folders;
+      state.notes = DEFAULT_DATA.notes;
+      await setDoc(userDocRef(uid), { folders: state.folders, notes: state.notes });
     }
-  } catch(e) {}
-  return null;
+  } catch(e) {
+    console.warn('Failed to load notes from Firestore', e);
+    showToast('⚠ Could not load your notes — check your connection');
+  }
 }
 
-function saveToLocalStorage() {
+async function saveData() {
+  if (!currentUser) return false;
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ folders: state.folders, notes: state.notes }));
-  } catch(e) {}
+    await setDoc(userDocRef(currentUser.uid), { folders: state.folders, notes: state.notes });
+    return true;
+  } catch(e) {
+    console.warn('Failed to save notes to Firestore', e);
+    return false;
+  }
 }
 
-const cached = loadFromLocalStorage();
+async function signInWithGoogle() {
+  const errorEl = document.getElementById('signinError');
+  if (errorEl) errorEl.textContent = '';
+  try {
+    await signInWithPopup(auth, googleProvider);
+  } catch(e) {
+    console.warn('Sign-in failed', e);
+    if (errorEl) errorEl.textContent = 'Sign-in failed. Please try again.';
+  }
+}
+
+async function signOutUser() {
+  await signOut(auth);
+}
 
 let state = {
-  folders: cached ? cached.folders : DEFAULT_DATA.folders,
-  notes: cached ? cached.notes : DEFAULT_DATA.notes,
+  folders: [],
+  notes: [],
   activeFolder: null,
   activeNote: null,
   isNew: false,
@@ -252,7 +294,7 @@ function removeAction(i) {
   renderActions();
 }
 
-function saveNote() {
+async function saveNote() {
   const title = document.getElementById('noteTitle').value.trim();
   const folderId = document.getElementById('noteFolder').value;
 
@@ -283,21 +325,26 @@ function saveNote() {
     if (idx >= 0) state.notes[idx] = note;
   }
 
-  saveToLocalStorage();
-  setStatus('Saved ✓');
-  setTimeout(() => setStatus(''), 2000);
-  showToast('Note saved');
+  const ok = await saveData();
+  if (ok) {
+    setStatus('Saved ✓');
+    setTimeout(() => setStatus(''), 2000);
+    showToast('Note saved');
+  } else {
+    setStatus('');
+    showToast('⚠ Save failed — check your connection');
+  }
   render();
 }
 
-function deleteNote() {
+async function deleteNote() {
   if (!state.activeNote || state.activeNote === 'new') return;
   const id = state.activeNote;
   state.notes = state.notes.filter(n => n.id !== id);
   state.activeNote = null;
-  saveToLocalStorage();
+  const ok = await saveData();
   showEmpty();
-  showToast('Note deleted');
+  showToast(ok ? 'Note deleted' : '⚠ Delete failed to sync — check your connection');
   render();
 }
 
@@ -342,16 +389,16 @@ function openAddFolder() {
   setTimeout(() => document.getElementById('folderNameInput').focus(), 100);
 }
 
-function confirmAddFolder() {
+async function confirmAddFolder() {
   const name = document.getElementById('folderNameInput').value.trim();
   if (!name) return;
   const color = FOLDER_COLORS[state.folders.length % FOLDER_COLORS.length];
   const folder = { id: 'f'+(Date.now()), name, color };
   state.folders.push(folder);
-  saveToLocalStorage();
+  const ok = await saveData();
   closeModal('folderModal');
   render();
-  showToast('Project "'+name+'" created');
+  showToast(ok ? 'Project "'+name+'" created' : '⚠ Created locally, but failed to sync');
 }
 
 function closeModal(id) {
@@ -428,7 +475,7 @@ function importData(e) {
   const file = e.target.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = function(ev) {
+  reader.onload = async function(ev) {
     try {
       const parsed = JSON.parse(ev.target.result);
       if (!parsed.folders || !parsed.notes) throw new Error('Invalid format');
@@ -449,7 +496,7 @@ function importData(e) {
 
       state.activeNote = null;
       state.activeFolder = null;
-      saveToLocalStorage();
+      const ok = await saveData();
       showEmpty();
       render();
 
@@ -457,7 +504,7 @@ function importData(e) {
       if (newNotes.length) summary.push(newNotes.length + ' new note' + (newNotes.length > 1 ? 's' : ''));
       if (updatedNotes.length) summary.push(updatedNotes.length + ' updated');
       if (newFolders.length) summary.push(newFolders.length + ' new project' + (newFolders.length > 1 ? 's' : ''));
-      showToast('Imported: ' + (summary.length ? summary.join(', ') : 'nothing new'));
+      showToast((ok ? 'Imported: ' : '⚠ Imported locally (sync failed): ') + (summary.length ? summary.join(', ') : 'nothing new'));
     } catch(err) {
       showToast('Import failed: invalid file');
     }
@@ -533,13 +580,33 @@ try {
     document.getElementById('sidebarCollapseBtn').title = 'Expand sidebar';
   }
 } catch(e) {}
-render();
-if (isMobile()) mobileShowNotes();
 
-// stagger the note list in on first paint only
 const noteCardsEl = document.getElementById('noteCards');
-noteCardsEl.classList.add('intro');
-setTimeout(() => noteCardsEl.classList.remove('intro'), 1000);
+
+onAuthStateChanged(auth, async (user) => {
+  currentUser = user;
+  const screen = document.getElementById('signinScreen');
+  const lede = document.getElementById('signinLede');
+  const googleBtn = document.getElementById('signinGoogleBtn');
+  const signOutBtn = document.getElementById('signOutBtn');
+
+  if (user) {
+    screen.style.display = 'none';
+    signOutBtn.style.display = '';
+    signOutBtn.title = 'Sign out (' + (user.email || '') + ')';
+    await loadUserData(user.uid);
+    render();
+    if (isMobile()) mobileShowNotes();
+    // stagger the note list in on first paint only
+    noteCardsEl.classList.add('intro');
+    setTimeout(() => noteCardsEl.classList.remove('intro'), 1000);
+  } else {
+    screen.style.display = 'flex';
+    lede.textContent = 'Sign in to access your notes.';
+    googleBtn.style.display = '';
+    signOutBtn.style.display = 'none';
+  }
+});
 
 // Expose functions to global scope (required for onclick attributes with type="module")
 window.selectFolder = selectFolder;
@@ -567,3 +634,5 @@ window.toggleSidebarCollapse = toggleSidebarCollapse;
 window.mobileShowNotes = mobileShowNotes;
 window.mobileBack = mobileBack;
 window.toggleTheme = toggleTheme;
+window.signInWithGoogle = signInWithGoogle;
+window.signOutUser = signOutUser;
