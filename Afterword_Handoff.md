@@ -159,3 +159,18 @@ If picking this project up cold:
 4. Confirm whether the user still lacks local dev tooling before suggesting any CLI-based approach.
 5. Treat Priority 1 items (fresh Firebase setup + server-side Claude API call) as the most urgent unless the user explicitly says otherwise.
 6. Note the app is called **Afterword** now, not MeetingMind — see Section 10 before renaming any files or infrastructure.
+
+---
+
+## 12. Future Improvements
+
+### Mobile App
+
+- **Phase 1 — PWA**: Add `manifest.json` + a service worker to `afterword.vesatile.com`. Enables "Add to Home Screen" on iOS and Android, full-screen mode, and offline support. Minimal effort, no app store required. Good first step.
+- **Phase 2 — Capacitor wrapper**: If App Store presence is wanted, use Capacitor (Ionic) to wrap the existing vanilla JS codebase into a native shell (`.ipa` / `.apk`). Code stays the same; native device APIs available via plugins. Requires Xcode (Mac) for iOS builds.
+
+### Claude API — Distribution Problem
+
+- Currently the Claude API is called **directly from the browser**, which exposes the API key client-side.
+- This is acceptable for a single-user personal tool.
+- **Before distributing to other users** (e.g. a public App Store listing), a **backend proxy** is needed to keep the API key server-side — a lightweight serverless function (e.g. a Vercel API route) that forwards requests to Anthropic on behalf of the client. This overlaps with the Priority 1 server-side Claude API work noted in Section 11.
