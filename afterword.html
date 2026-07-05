@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>MeetingMind</title>
+<title>Afterword</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -895,7 +895,7 @@
 <!-- Sidebar -->
 <aside class="sidebar" id="sidebar">
   <div class="sidebar-header">
-    <div class="logo">Meeting<span>Mind</span></div>
+    <div class="logo">After<span>word</span></div>
   </div>
   <div class="sidebar-search">
     <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
@@ -1016,6 +1016,7 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
 import { getFirestore, collection, doc, getDocs, setDoc, deleteDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
+// Project ID predates the Afterword rebrand and is permanent (Firebase project IDs can't be renamed) — internal-only, not user-visible.
 const firebaseConfig = {
   apiKey: "AIzaSyCEUuXqNZq-mhYGdORml4H_ipJqUImJVfs",
   authDomain: "meetingmind-af171.firebaseapp.com",
@@ -1030,7 +1031,8 @@ const db = getFirestore(app);
 
 const FOLDER_COLORS = ['#c17f3e','#7c6faa','#2e7d52','#c0392b','#2471a3','#d4ac0d','#a04000','#1a5276'];
 
-const STORAGE_KEY = 'meetingmind_v1';
+const STORAGE_KEY = 'afterword_v1';
+const OLD_STORAGE_KEY = 'meetingmind_v1'; // pre-rebrand key — migrated once in loadFromLocalStorage, then unused
 
 const DEFAULT_DATA = {
   folders: [
@@ -1074,6 +1076,12 @@ function loadFromLocalStorage() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) return JSON.parse(raw);
+    const oldRaw = localStorage.getItem(OLD_STORAGE_KEY);
+    if (oldRaw) {
+      localStorage.setItem(STORAGE_KEY, oldRaw);
+      localStorage.removeItem(OLD_STORAGE_KEY);
+      return JSON.parse(oldRaw);
+    }
   } catch(e) {}
   return null;
 }
@@ -1491,7 +1499,7 @@ function exportData() {
   const a = document.createElement('a');
   const date = new Date().toISOString().slice(0,10);
   a.href = url;
-  a.download = 'meetingmind-backup-' + date + '.json';
+  a.download = 'afterword-backup-' + date + '.json';
   a.click();
   URL.revokeObjectURL(url);
   showToast('Backup exported');
