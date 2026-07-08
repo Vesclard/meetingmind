@@ -5,6 +5,57 @@ import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/fireb
 // Muted-but-specific folder tones, derived from the Vesatile palette
 const FOLDER_COLORS = ['#3B5244','#8B3A3A','#A8842C','#4A6274','#6E5A7E','#31606B','#9C6B4E','#7A8581'];
 
+/* ── BYOK: the AI runs on the user's own Anthropic key ──
+   The key lives only in this device's localStorage and in request headers to
+   api.anthropic.com — never in Firestore, never on Afterword's servers. */
+const API_KEY_STORAGE = 'afterword_api_key_v1';
+const AI_MODEL_STORAGE = 'afterword_ai_model';
+const AI_MODELS = ['claude-opus-4-8', 'claude-sonnet-5', 'claude-haiku-4-5'];
+const DEFAULT_AI_MODEL = AI_MODELS[0];
+const ANTHROPIC_VERSION = '2023-06-01';
+
+function getApiKey() {
+  try { return localStorage.getItem(API_KEY_STORAGE) || ''; } catch(e) { return ''; }
+}
+
+function getAiModel() {
+  try {
+    const m = localStorage.getItem(AI_MODEL_STORAGE);
+    return AI_MODELS.includes(m) ? m : DEFAULT_AI_MODEL;
+  } catch(e) { return DEFAULT_AI_MODEL; }
+}
+
+function anthropicHeaders(key) {
+  return {
+    'content-type': 'application/json',
+    'x-api-key': key,
+    'anthropic-version': ANTHROPIC_VERSION,
+    // Anthropic's official opt-in for browser-direct calls. Safe here because
+    // the key is the user's own, entered by them, stored only on their device.
+    'anthropic-dangerous-direct-browser-access': 'true'
+  };
+}
+
+// Single entry point for all Claude calls. Throws Error with a code message:
+// 'no-key' | 'auth' | 'rate' | 'network' | 'upstream'.
+async function callClaude({ system, messages, maxTokens = 2000 }) {
+  const key = getApiKey();
+  if (!key) throw new Error('no-key');
+  let res;
+  try {
+    res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: anthropicHeaders(key),
+      body: JSON.stringify({ model: getAiModel(), max_tokens: maxTokens, system, messages })
+    });
+  } catch(e) { throw new Error('network'); }
+  if (res.status === 401 || res.status === 403) throw new Error('auth');
+  if (res.status === 429) throw new Error('rate');
+  if (!res.ok) throw new Error('upstream');
+  const data = await res.json();
+  return (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
+}
+
 const firebaseConfig = {
   apiKey: "AIzaSyD0y_PBPCN-yjyYXZv-y4NDSSUJRZlMIB0",
   authDomain: "afterword-53cd7.firebaseapp.com",
@@ -117,6 +168,12 @@ async function signOutUser() {
     signOutBtn.disabled = true;
     signOutBtn.title = 'Signing out…';
   }
+  // The user's Anthropic key must not survive into another person's session
+  // on a shared machine — clear it before anything else can go wrong.
+  try {
+    localStorage.removeItem(API_KEY_STORAGE);
+    localStorage.removeItem(AI_MODEL_STORAGE);
+  } catch(e) {}
   if (pendingSave) await pendingSave;
   await signOut(auth);
   // Force a full reload so no in-memory state from this account can ever
@@ -430,6 +487,14 @@ function toggleAi() {
   document.getElementById('aiChevron').classList.toggle('open', state.aiOpen);
 }
 
+const AI_ERROR_MESSAGES = {
+  'no-key': 'Add your Anthropic API key in AI settings first.',
+  'auth': 'Your API key was rejected — update it in AI settings.',
+  'rate': "You've hit your Anthropic rate limit — wait a moment and try again.",
+  'network': 'Could not reach Anthropic — check your connection.',
+  'upstream': 'Anthropic is busy right now — try again shortly.'
+};
+
 async function askAi() {
   const q = document.getElementById('aiInput').value.trim();
   if (!q) return;
@@ -444,23 +509,104 @@ async function askAi() {
   }).join('\n\n---\n\n');
 
   try {
-    const res = await fetch('/api/ask', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-3-5-sonnet-latest',
-        max_tokens: 1000,
-        system: `You are a helpful assistant for a personal meeting notes app. Answer the user's question based only on their meeting notes below. Be concise and specific. If you can't find the answer in the notes, say so.\n\n--- NOTES ---\n${notesContext}`,
-        messages: [{ role: 'user', content: q }]
-      })
+    const answer = await callClaude({
+      system: `You are a helpful assistant for a personal meeting notes app. Answer the user's question based only on their meeting notes below. Be concise and specific. If you can't find the answer in the notes, say so.\n\n--- NOTES ---\n${notesContext}`,
+      messages: [{ role: 'user', content: q }]
     });
-    const data = await res.json();
-    resp.textContent = data.content?.[0]?.text || 'No answer found.';
+    resp.textContent = answer || 'No answer found.';
+    document.getElementById('aiInput').value = '';
   } catch(e) {
-    resp.textContent = 'Could not reach the AI. Check your connection.';
+    resp.textContent = AI_ERROR_MESSAGES[e.message] || 'Something went wrong — try again.';
   }
   btn.disabled = false;
-  document.getElementById('aiInput').value = '';
+}
+
+/* ── AI settings (BYOK) ── */
+function renderKeyStatus() {
+  const el = document.getElementById('keyStatus');
+  const removeBtn = document.getElementById('removeKeyBtn');
+  const key = getApiKey();
+  // textContent on purpose — the (masked) key must never go through innerHTML
+  el.textContent = key ? 'Saved on this device: sk-ant-…' + key.slice(-4) : 'No key saved on this device';
+  el.classList.toggle('has-key', !!key);
+  removeBtn.style.display = key ? '' : 'none';
+}
+
+function setKeyHint(msg, cls) {
+  const el = document.getElementById('keyHint');
+  el.textContent = msg || '';
+  el.className = 'key-hint' + (cls ? ' ' + cls : '');
+}
+
+function openSettings() {
+  renderKeyStatus();
+  setKeyHint('');
+  document.getElementById('apiKeyInput').value = '';
+  document.getElementById('modelSelect').value = getAiModel();
+  document.getElementById('settingsModal').classList.add('show');
+}
+
+// Verifies a key without generating anything — count_tokens is near-free.
+// Returns 'valid' | 'rejected' | 'unknown' (couldn't verify, e.g. offline).
+async function validateApiKey(key) {
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages/count_tokens', {
+      method: 'POST',
+      headers: anthropicHeaders(key),
+      body: JSON.stringify({ model: DEFAULT_AI_MODEL, messages: [{ role: 'user', content: 'ping' }] })
+    });
+    if (res.ok) return 'valid';
+    if (res.status === 401 || res.status === 403) return 'rejected';
+    return 'unknown';
+  } catch(e) { return 'unknown'; }
+}
+
+async function saveApiKey() {
+  const input = document.getElementById('apiKeyInput');
+  const btn = document.getElementById('saveKeyBtn');
+  const key = input.value.trim();
+  if (!key) { setKeyHint('Paste your API key first.', 'err'); return; }
+  btn.disabled = true;
+  btn.textContent = 'Checking…';
+  const verdict = await validateApiKey(key);
+  btn.disabled = false;
+  btn.textContent = 'Save key';
+  if (verdict === 'rejected') {
+    setKeyHint('Anthropic rejected this key — check it and try again.', 'err');
+    return;
+  }
+  try { localStorage.setItem(API_KEY_STORAGE, key); } catch(e) {
+    setKeyHint('Could not store the key on this device.', 'err');
+    return;
+  }
+  input.value = '';
+  setKeyHint(verdict === 'valid' ? 'Key looks valid ✓' : 'Saved — could not verify it right now.', verdict === 'valid' ? 'ok' : '');
+  renderKeyStatus();
+  updateAiPanel();
+  showToast('API key saved on this device');
+}
+
+function removeApiKey() {
+  try { localStorage.removeItem(API_KEY_STORAGE); } catch(e) {}
+  renderKeyStatus();
+  setKeyHint('');
+  updateAiPanel();
+  showToast('API key removed from this device');
+}
+
+function saveModelPref() {
+  const val = document.getElementById('modelSelect').value;
+  if (AI_MODELS.includes(val)) {
+    try { localStorage.setItem(AI_MODEL_STORAGE, val); } catch(e) {}
+  }
+}
+
+// Swap the AI panel between its ready state and the add-a-key prompt.
+function updateAiPanel() {
+  const hasKey = !!getApiKey();
+  document.getElementById('aiKeyPrompt').style.display = hasKey ? 'none' : 'flex';
+  document.getElementById('aiResponse').style.display = hasKey ? '' : 'none';
+  document.getElementById('aiInputRow').style.display = hasKey ? '' : 'none';
 }
 
 function formatDate(d) {
@@ -593,6 +739,7 @@ function toggleTheme() {
 }
 
 syncThemeIcons();
+updateAiPanel();
 try {
   if (localStorage.getItem('afterword_sidebar_collapsed') === '1') {
     document.getElementById('sidebar').classList.add('collapsed');
@@ -675,3 +822,7 @@ window.mobileBack = mobileBack;
 window.toggleTheme = toggleTheme;
 window.signInWithGoogle = signInWithGoogle;
 window.signOutUser = signOutUser;
+window.openSettings = openSettings;
+window.saveApiKey = saveApiKey;
+window.removeApiKey = removeApiKey;
+window.saveModelPref = saveModelPref;

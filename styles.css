@@ -72,7 +72,7 @@ html { scrollbar-color: var(--line) transparent; scrollbar-width: thin; }
 /* The signature label style: small + wide-tracked + uppercase + mono */
 .sidebar-section span, .note-list-header, .meta-label, .section-divider,
 .sheet-head, .empty-eyebrow, .modal-eyebrow, .ai-label, .logo-byline,
-.sidebar-credit, .topbar-badge {
+.sidebar-credit, .topbar-badge, .settings-label {
   font-family: var(--font-mono);
   text-transform: uppercase;
   letter-spacing: .16em;
@@ -1141,6 +1141,71 @@ html { scrollbar-color: var(--line) transparent; scrollbar-width: thin; }
   transition: transform .2s ease, box-shadow .2s ease;
 }
 .modal-confirm:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+
+/* ── AI settings modal (BYOK) ── */
+.settings-modal input { margin-bottom: 8px; font-family: var(--font-mono); font-size: 13px; }
+
+.key-status {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: .04em;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+.key-status.has-key { color: var(--brand); }
+
+.key-hint {
+  font-size: 12px;
+  min-height: 17px;
+  margin-bottom: 12px;
+  color: var(--muted);
+}
+.key-hint.ok { color: var(--brand); }
+.key-hint.err { color: var(--danger); }
+
+.settings-field {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.settings-label { font-size: 10px; color: var(--muted); }
+.settings-field select {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink);
+  background: var(--surface);
+  outline: none;
+  transition: border-color .2s ease;
+}
+.settings-field select:focus { border-color: var(--brand); }
+
+.settings-note {
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+.settings-note a { color: var(--brand); }
+
+.ai-settings-btn { width: 100%; margin-top: 8px; }
+
+/* AI panel — no-key state */
+.ai-keyprompt {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted);
+  padding: 2px 0 4px;
+}
+.ai-keyprompt-glyph { color: var(--brand); font-size: 10px; flex-shrink: 0; }
+.ai-keyprompt .ai-ask-btn { flex-shrink: 0; }
 
 /* ── Folder assign prompt ── */
 .assign-prompt {

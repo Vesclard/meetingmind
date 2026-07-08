@@ -69,6 +69,7 @@
       <button class="io-btn" onclick="exportData()" title="Export all notes as JSON backup">↓ Export</button>
       <label class="io-btn" title="Import notes from a JSON backup">↑ Import<input type="file" accept=".json" onchange="importData(event)" style="display:none;" /></label>
     </div>
+    <button class="io-btn ai-settings-btn" onclick="openSettings()" title="AI settings — your API key and model">◆ AI settings</button>
     <div class="sidebar-credit">◆ Less effort than you think ◆</div>
   </div>
 </aside>
@@ -163,8 +164,13 @@
           <span class="ai-chevron" id="aiChevron">▼</span>
         </div>
         <div class="ai-body" id="aiBody">
+          <div class="ai-keyprompt" id="aiKeyPrompt" style="display:none;">
+            <span class="ai-keyprompt-glyph">◆</span>
+            <span class="ai-keyprompt-text">The assistant runs on your own Anthropic account. Add your API key to ask questions across your notes.</span>
+            <button class="ai-ask-btn btn-sheen" onclick="openSettings()">Add key</button>
+          </div>
           <div class="ai-response" id="aiResponse">Ask me something like "what was decided in the last planning meeting?" or "who owns the design task?"</div>
-          <div class="ai-input-row">
+          <div class="ai-input-row" id="aiInputRow">
             <input class="ai-input" id="aiInput" placeholder="Ask a question about your notes..." onkeydown="if(event.key==='Enter')askAi()" />
             <button class="ai-ask-btn btn-sheen" id="aiBtn" onclick="askAi()">Ask</button>
           </div>
@@ -184,6 +190,32 @@
     <div class="modal-actions">
       <button class="modal-cancel" onclick="closeModal('folderModal')">Cancel</button>
       <button class="modal-confirm btn-sheen" onclick="confirmAddFolder()">Create project</button>
+    </div>
+  </div>
+</div>
+
+<!-- AI settings modal (BYOK — the user's own Anthropic key, stored only on this device) -->
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal settings-modal">
+    <div class="modal-eyebrow">AI settings</div>
+    <h3>Your Anthropic API key</h3>
+    <p>The assistant runs on your own Anthropic account, at your own usage limits. Your key is stored only on this device — it never touches Afterword's servers.</p>
+    <div class="key-status" id="keyStatus"></div>
+    <input id="apiKeyInput" type="password" placeholder="Paste your key (sk-ant-...)" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter')saveApiKey()" />
+    <p class="key-hint" id="keyHint"></p>
+    <div class="settings-field">
+      <label class="settings-label" for="modelSelect">Model</label>
+      <select id="modelSelect" onchange="saveModelPref()">
+        <option value="claude-opus-4-8">Opus 4.8 — most capable</option>
+        <option value="claude-sonnet-5">Sonnet 5 — balanced</option>
+        <option value="claude-haiku-4-5">Haiku 4.5 — fastest &amp; cheapest</option>
+      </select>
+    </div>
+    <p class="settings-note">Tip: create the key at <a href="https://console.anthropic.com" target="_blank" rel="noopener noreferrer">console.anthropic.com</a> in its own workspace with a monthly spend limit — Afterword can then never cost more than you allow.</p>
+    <div class="modal-actions">
+      <button class="modal-cancel" id="removeKeyBtn" onclick="removeApiKey()">Remove key</button>
+      <button class="modal-cancel" onclick="closeModal('settingsModal')">Close</button>
+      <button class="modal-confirm btn-sheen" id="saveKeyBtn" onclick="saveApiKey()">Save key</button>
     </div>
   </div>
 </div>

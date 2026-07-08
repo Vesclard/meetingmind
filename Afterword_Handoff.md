@@ -24,7 +24,7 @@ Afterword is a personal meeting notes app that solves a specific problem: notes 
 | Styling | Custom CSS (no Tailwind/Bootstrap), Plus Jakarta Sans + JetBrains Mono fonts (Vesatile brand system, light + dark themes) |
 | Database | Firebase Firestore, project `afterword-53cd7` — one document per user at `users/{uid}` holding `{ folders, notes }` (see Section 6) |
 | Storage | Firestore is the source of truth for note data, gated behind Google Sign-In. `localStorage` is still used for small UI prefs only (`afterword_theme`, `afterword_sidebar_collapsed`) — no note data lives there anymore |
-| AI | Anthropic Claude API, called directly from the browser (`claude-sonnet-4-20250514`) |
+| AI | Anthropic Claude API, called directly from the browser with the **user's own API key** (BYOK, July 2026). Default model `claude-opus-4-8`, user-selectable (Sonnet 5 / Haiku 4.5). Key stored in `localStorage` only, cleared on sign-out. No server proxy. |
 | Hosting | Vercel, deployed via a GitHub repository (`afterword`) |
 
 **Why this stack:** No installs required on the user's constrained work PC. Everything ships as static files with no build tooling, deployed through web-only interfaces (GitHub web upload → Vercel import).
@@ -36,9 +36,9 @@ Afterword is a personal meeting notes app that solves a specific problem: notes 
 No-build static structure:
 - `index.html` — markup only: sidebar, note list, detail panel, AI panel, modals, mobile bottom nav. Links to the two files below via `<link rel="stylesheet" href="styles.css">` and `<script type="module" src="app.js">`. (Renamed from `afterword.html` to `index.html` for native Vercel and local browser hosting compatibility).
 - `styles.css` — all CSS, including a `@media (max-width: 700px)` block for mobile.
-- `app.js` — all app logic and state management. Calls `/api/ask` for the AI assistant.
+- `app.js` — all app logic and state management. The AI assistant calls `api.anthropic.com` directly from the browser via the shared `callClaude()` helper (BYOK — user's own key).
 - `vercel.json` — Vercel configuration: enables clean URLs.
-- `/api/ask.js` — Node.js Serverless Function that proxies Claude API requests and injects the `ANTHROPIC_API_KEY` securely.
+- ~~`/api/ask.js`~~ — **deleted July 2026.** It was an unauthenticated open proxy on the developer's Anthropic key (see `AUDIT.md` S1) and was replaced by the BYOK model. Do not reintroduce a dev-key proxy.
 
 **Important quirk:** Because `app.js` is loaded as `type="module"`, all functions called from inline `onclick="..."` HTML attributes in `index.html` must be explicitly exposed via `window.functionName = functionName` at the bottom of `app.js`. If a new function is added and referenced from HTML, it **must** be added to this list or clicks will silently fail.
 
@@ -119,7 +119,7 @@ Firebase/Firestore has been **reconnected**, on a fresh project set up from scra
 
 1. **No local dev environment (historically).** The user's work PC has not allowed installing Node, the Firebase CLI, or other local tooling. Confirm this constraint still holds before suggesting CLI-based workflows or a build step.
 2. **Cloud sync is back.** Firebase/Firestore is reconnected on the new `afterword-53cd7` project, gated behind Google Sign-In (Section 6). The app now requires sign-in — there's no offline/anonymous mode. `localStorage` is UI-prefs-only now, not a data store.
-3. **The Claude API key is secure** — the AI assistant calls the server-side `/api/ask.js` proxy. The `ANTHROPIC_API_KEY` must be configured as an environment variable in Vercel, keeping it secret.
+3. **The AI is BYOK (July 2026)** — each user (including the owner) supplies their own Anthropic API key via the AI-settings modal; it lives only in that device's `localStorage` and is cleared on sign-out. There is **no** `ANTHROPIC_API_KEY` in Vercel anymore — its presence would be a regression. The old key was rotated after the open-proxy finding (AUDIT S1).
 4. **`type="module"` + inline `onclick`** requires the `window.fn = fn` exposure pattern described in Section 3. Easy to forget when adding features. Applies to `app.js` regardless of it being an external file rather than inline.
 5. Categorization is **folders only** (by deliberate user choice) — do not reintroduce tags/auto-categorization without checking with the user first.
 
@@ -129,7 +129,7 @@ Firebase/Firestore has been **reconnected**, on a fresh project set up from scra
 
 ### Priority 1 — Security & sync
 - **Set up a new Firebase project from scratch and wire Firestore back into `app.js`.** ✅ Completed. New project `afterword-53cd7`, Google Sign-In auth, Firestore rules scoped per-user via `request.auth.uid == uid` — see Section 6.
-- **Move the Claude API call server-side.** ✅ Completed. Implemented via the Vercel serverless function `/api/ask.js` and local endpoint mapping in `app.js`.
+- **Move the Claude API call server-side.** ✅ Completed 2025, then **superseded July 2026**: the proxy turned out to be an unauthenticated open endpoint on the dev's key (AUDIT S1), and the production billing decision changed to user-pays. The proxy was deleted and replaced with BYOK direct-browser calls (see Section 12).
 
 ### Priority 2 — Reliability
 - **Add conflict handling for concurrent edits.** Now that cloud sync is back: if the same note is edited on two devices while offline, the last save still silently overwrites the other. Worth adding a simple `updatedAt` timestamp check with a warning if a conflict is detected. Still open.
@@ -186,5 +186,6 @@ If picking this project up cold:
 
 ### Claude API — Distribution Problem
 
-- ✅ Resolved for the current single-user deployment. The Claude API is called server-side via the Vercel serverless function `/api/ask.js`, which injects `ANTHROPIC_API_KEY` from the environment — the key is never exposed client-side. `app.js` calls this proxy rather than the Anthropic API directly.
-- **Before distributing to other users** (e.g. a public App Store listing), revisit this proxy for multi-tenant concerns — e.g. per-user rate limiting or auth on `/api/ask.js` — since it currently assumes a single trusted caller rather than arbitrary public users.
+- ✅ **Resolved via BYOK (July 2026), superseding the proxy approach.** Every user brings their own Anthropic API key: entered in the AI-settings modal, validated with a free `count_tokens` call, stored only in that device's `localStorage` (`afterword_api_key_v1`), cleared on sign-out, and sent only to `api.anthropic.com` (direct browser calls with the `anthropic-dangerous-direct-browser-access: true` header — Anthropic's official BYOK opt-in). The developer holds no keys and carries no AI cost at any number of users.
+- The old `/api/ask.js` proxy was deleted (it was an unauthenticated open endpoint on the dev's key — AUDIT S1) and the dev key rotated. Routing traffic against users' Claude Pro/Max *subscriptions* is prohibited by Anthropic's terms — BYOK Console keys are the compliant path.
+- Remaining gate before public distribution: the XSS-hardening work (MASTERPLAN Phase 1.2–1.3) — with a key in `localStorage`, XSS = key theft.
