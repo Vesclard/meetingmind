@@ -99,7 +99,7 @@ Currently safe because all generated attributes use double quotes, but it's a on
 | # | Finding | Impact |
 |---|---|---|
 | R1 | **Last-write-wins across devices.** Whole `{folders, notes}` doc rewritten on every save; no `updatedAt`, no transaction. Editing on two devices silently destroys one side's work. (Handoff Priority 2, still open.) | Data loss |
-| R2 | **1 MiB Firestore document ceiling.** ✅ *addressed in code 2026-07-10 (Phase 2.1), deploy-gated on rules* — dataset split into per-note docs + a `meta` doc; saves are per-note. The whole-doc ceiling and re-upload-everything cost are gone once deployed. | Hard scaling wall |
+| R2 | **1 MiB Firestore document ceiling.** ✅ *fixed & deployed 2026-07-10 (Phase 2.1)* — dataset split into per-note docs + a `meta` doc; saves are per-note. Whole-doc ceiling and re-upload-everything cost eliminated; verified live. | Hard scaling wall |
 | R3 | **AI context = full dump.** `askAi` serializes *all* notes into the system prompt per question. Cost grows with corpus size and will eventually degrade answer quality. Fine now; becomes the binding constraint if the corpus grows or the product ever ships to others. | Cost + quality decay |
 | R4 | **No autosave, no dirty-state guard.** Navigating to another note or closing the tab discards unsaved edits without warning. | Silent edit loss |
 | R5 | **Delete is one click, no confirm, no undo.** ✅ *fixed 2026-07-10 (Phase 1.4)* — `requestDeleteNote` now opens a styled confirm modal; `confirmDeleteNote` performs the destroy. | Accidental data loss |

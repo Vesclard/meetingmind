@@ -77,7 +77,7 @@ Storing a spendable credential in `localStorage` raises the stakes of any XSS fr
 
 Fixes: **S3, S4, S5**.
 
-> **Status 2026-07-10:** items 2, 3, 4 ✅ done (`sanitizeData` on load+import, `esc()` single-quote hardening + color interpolations, delete-confirm modal). Item 1 — **owner chose production/BYOK mode (open sign-in), 2026-07-10.** Rules are version-controlled in `firestore.rules` (recursive `users/{uid}/{document=**}`, uid-scoped, no email pin) and cover the Phase 2.1 subcollection paths. ⚠ **Owner must publish `firestore.rules` in the Firebase console** (no CLI here). No friendly permission-denied message needed — open sign-in is intended. Remaining gates before a *public announcement* (not before use): Firebase App Check + per-note field-size caps in the rules (see `firestore.rules` header), and the Phase 2 conflict/reliability work.
+> **Status 2026-07-10:** items 2, 3, 4 ✅ done (`sanitizeData` on load+import, `esc()` single-quote hardening + color interpolations, delete-confirm modal). Item 1 ✅ **done — owner chose production/BYOK mode (open sign-in) and published the rules to the console, 2026-07-10.** Rules are version-controlled in `firestore.rules` (recursive `users/{uid}/{document=**}`, uid-scoped, no email pin) and cover the Phase 2.1 subcollection paths. No friendly permission-denied message needed — open sign-in is intended. Remaining gates before a *public announcement* (not before use): Firebase App Check + per-note field-size caps in the rules (see `firestore.rules` header), and the Phase 2 conflict/reliability work.
 
 1. **Firestore rules — pick per deployment mode.** The uid scoping (`request.auth.uid == uid`) is non-negotiable in both modes.
    - *Private mode (today, single user):* additionally pin the owner in the rules (Firebase console, not the repo):
@@ -98,7 +98,7 @@ Fixes: **S3, S4, S5**.
 
 Fixes: **R1, R2, R4, R6**. This is the largest structural change; do it as one focused effort with export-backup first.
 
-> **Status 2026-07-10:** item 1 ✅ **implemented in code** (per-note refs, `writeAllPerNote`, migration/seed logic in `loadUserData`, per-doc `saveNoteDoc`/`deleteNoteDoc`/`saveMeta`, import batch-write) — ⚠ **deploy-gated**: the deployed Firestore rules must gain a recursive `match /{document=**}` under `users/{uid}` (same `uid ==` condition, plus the email pin if in private mode) **before** this ships, or every write to the new paths is denied. Not yet verified against live Firestore (needs the owner: deploy rules → sign in → confirm migration + CRUD). Items 2–5 ⬜ not started.
+> **Status 2026-07-10:** item 1 ✅ **done, deployed, and verified live.** BYOK rules published to the console; the per-note code is on `main`/Vercel; owner confirmed the blob→per-note migration and CRUD round-trip cleanly in production. Items 2–5 ⬜ not started (item 2 next).
 
 1. **Migrate to per-note documents.**
    - New shape: `users/{uid}/meta` (doc: `{ folders }`) and `users/{uid}/notes/{noteId}` (one doc per note, plus `updatedAt` (server timestamp) and `schemaVersion`).
