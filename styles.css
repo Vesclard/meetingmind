@@ -560,6 +560,26 @@ html { scrollbar-color: var(--line) transparent; scrollbar-width: thin; }
   overflow: hidden;
 }
 
+/* Loading skeletons — paper-toned blocks, no spinners (brand). The gentle
+   pulse is a functional loading cue; the global reduced-motion rule above
+   stops it after one cycle. */
+.note-card.skeleton,
+.folder-item.skeleton { pointer-events: none; }
+.skeleton { animation: sk-pulse 1.5s ease-in-out infinite; }
+.sk-line {
+  height: 10px;
+  border-radius: 4px;
+  background: var(--surface-2);
+}
+.note-card.skeleton .sk-line { margin-bottom: 9px; }
+.note-card.skeleton .sk-line:last-child { margin-bottom: 0; }
+.sk-title { width: 55%; height: 13px; }
+.sk-meta  { width: 38%; height: 8px; }
+.sk-body  { width: 92%; }
+.sk-body.short { width: 68%; }
+.sk-folder { display: block; width: 62%; height: 11px; }
+@keyframes sk-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+
 .empty-list {
   flex: 1;
   display: flex;

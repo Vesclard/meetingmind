@@ -368,8 +368,16 @@ function render() {
   renderTopbar();
 }
 
+// Loading skeleton (Masterplan Phase 2.5) — paper-toned blocks shown while the
+// post-sign-in loadUserData fetch runs, replacing the blank/empty flash. Purely
+// presentational, so aria-hidden.
+let isLoading = false;
+const SKELETON_NOTE = `<div class="note-card skeleton" aria-hidden="true"><div class="sk-line sk-title"></div><div class="sk-line sk-meta"></div><div class="sk-line sk-body"></div><div class="sk-line sk-body short"></div></div>`;
+const SKELETON_FOLDER = `<div class="folder-item skeleton" aria-hidden="true"><span class="sk-line sk-folder"></span></div>`;
+
 function renderFolders() {
   const el = document.getElementById('folderList');
+  if (isLoading) { el.innerHTML = SKELETON_FOLDER.repeat(5); return; }
   const allCount = state.notes.length;
   let html = `<div class="folder-item ${!state.activeFolder ? 'active' : ''}" onclick="selectFolder(null)">
     <div class="folder-dot" style="background:var(--muted)"></div>
@@ -391,6 +399,7 @@ function renderTopbar() {
   const f = state.folders.find(x => x.id === state.activeFolder);
   document.getElementById('topbarTitle').textContent = f ? f.name : 'All notes';
   const badge = document.getElementById('topbarBadge');
+  if (isLoading) { badge.textContent = ''; return; }
   const filtered = getFilteredNotes();
   badge.textContent = filtered.length + (filtered.length === 1 ? ' note' : ' notes');
 }
@@ -411,8 +420,9 @@ function getFilteredNotes() {
 }
 
 function renderNoteList() {
-  const notes = getFilteredNotes();
   const el = document.getElementById('noteCards');
+  if (isLoading) { el.innerHTML = SKELETON_NOTE.repeat(5); return; }
+  const notes = getFilteredNotes();
   if (!notes.length) {
     el.innerHTML = `<div class="empty-list"><div class="empty-glyph">◆</div><p>${state.searchQuery ? 'No notes match your search' : 'No notes here yet'}</p></div>`;
     return;
@@ -1151,14 +1161,17 @@ onAuthStateChanged(auth, async (user) => {
     // before loading this account's own data — belt-and-suspenders on top
     // of the sign-out reset below, so no stale note can ever survive a
     // sign-out/sign-in cycle regardless of event timing.
-    resetLocalState();
+    isLoading = true;
+    resetLocalState();       // renders the skeleton (isLoading is true)
     await loadUserData(user.uid);
+    isLoading = false;
     render();
     if (isMobile()) mobileShowNotes();
     // stagger the note list in on first paint only
     noteCardsEl.classList.add('intro');
     setTimeout(() => noteCardsEl.classList.remove('intro'), 1000);
   } else {
+    isLoading = false;
     screen.style.display = 'flex';
     lede.textContent = 'Sign in to access your notes.';
     googleBtn.style.display = '';
