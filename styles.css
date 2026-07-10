@@ -360,6 +360,8 @@ html { scrollbar-color: var(--line) transparent; scrollbar-width: thin; }
   color: var(--brand);
   text-align: right;
 }
+.sync-status.status-muted { color: var(--muted); }
+.sync-status.status-error { color: var(--danger); }
 
 .topbar-badge {
   font-size: 9px;

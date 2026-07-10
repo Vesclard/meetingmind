@@ -123,16 +123,16 @@
 
             <div class="sheet-head">Meeting record</div>
 
-            <input class="note-title-input" id="noteTitle" placeholder="Meeting title..." />
+            <input class="note-title-input" id="noteTitle" placeholder="Meeting title..." oninput="markDirty()" />
 
             <div class="meta-row">
               <div class="meta-field">
                 <span class="meta-label">Date</span>
-                <input type="date" id="noteDate" />
+                <input type="date" id="noteDate" onchange="markDirty()" />
               </div>
               <div class="meta-field">
                 <span class="meta-label">Attendees</span>
-                <input type="text" id="noteAttendees" placeholder="e.g. Alice, Bob" />
+                <input type="text" id="noteAttendees" placeholder="e.g. Alice, Bob" oninput="markDirty()" />
               </div>
               <div class="meta-field">
                 <span class="meta-label">Project</span>
@@ -141,7 +141,7 @@
             </div>
 
             <div class="section-divider">Notes</div>
-            <textarea class="notes-textarea" id="noteBody" placeholder="What was discussed?"></textarea>
+            <textarea class="notes-textarea" id="noteBody" placeholder="What was discussed?" oninput="markDirty()"></textarea>
 
             <div class="section-divider">Action items</div>
             <div class="action-list" id="actionList"></div>

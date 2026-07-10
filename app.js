@@ -302,6 +302,8 @@ async function signOutUser() {
     localStorage.removeItem(API_KEY_STORAGE);
     localStorage.removeItem(AI_MODEL_STORAGE);
   } catch(e) {}
+  // Flush any unsaved edit, then wait for it (and any in-flight save) to land.
+  commitPendingEdits();
   if (pendingSave) await pendingSave;
   await signOut(auth);
   // Force a full reload so no in-memory state from this account can ever
@@ -322,6 +324,43 @@ let state = {
 
 let editActions = [];
 let actionCounter = 100;
+
+// Autosave + dirty tracking (Masterplan Phase 2.3). `editSeq` increments on
+// every user edit to the open note; `savedSeq` is the value last persisted.
+// The note is dirty when they differ — that drives the beforeunload guard and
+// prevents a slow save from clearing edits the user made while it was in flight.
+let editSeq = 0;
+let savedSeq = 0;
+let autosaveTimer = null;
+const AUTOSAVE_DELAY = 2000;
+
+function scheduleAutosave() {
+  if (autosaveTimer) clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(() => { autosaveTimer = null; persistCurrentNote(false); }, AUTOSAVE_DELAY);
+}
+
+function cancelAutosave() {
+  if (autosaveTimer) { clearTimeout(autosaveTimer); autosaveTimer = null; }
+}
+
+// Called from every editor input; marks the open note dirty and (re)arms autosave.
+function markDirty() {
+  if (!state.activeNote) return;
+  editSeq++;
+  setStatus('Unsaved…', 'muted');
+  scheduleAutosave();
+}
+
+// Flush a pending dirty edit before navigating away from the open note, so
+// switching notes/folders never drops unsaved work. Reads the current form
+// synchronously (before repopulation) then lets the write finish in the
+// background; the completion is ignored if the editor has moved on.
+function commitPendingEdits() {
+  if (editSeq !== savedSeq && state.activeNote) {
+    cancelAutosave();
+    persistCurrentNote(false);
+  }
+}
 
 function render() {
   renderFolders();
@@ -390,6 +429,7 @@ function renderNoteList() {
 }
 
 function selectFolder(id) {
+  commitPendingEdits();
   state.activeFolder = id;
   state.activeNote = null;
   state.isNew = false;
@@ -399,6 +439,7 @@ function selectFolder(id) {
 }
 
 function selectNote(id) {
+  commitPendingEdits();
   state.activeNote = id;
   state.isNew = false;
   const note = state.notes.find(n => n.id === id);
@@ -410,6 +451,7 @@ function selectNote(id) {
 }
 
 function newNote() {
+  commitPendingEdits();
   state.activeNote = 'new';
   state.isNew = true;
   editActions = [];
@@ -431,6 +473,11 @@ function populateForm(note) {
   checkAssignPrompt(note.folderId);
   document.getElementById('saveHint').textContent = '';
   document.getElementById('deleteBtn').style.display = state.isNew ? 'none' : 'inline-block';
+  // Opening a note is a clean slate — reset dirty tracking and clear status.
+  editSeq = 0;
+  savedSeq = 0;
+  cancelAutosave();
+  setStatus('');
 }
 
 function populateFolderSelect(id, selected) {
@@ -452,6 +499,7 @@ function checkAssignPrompt(folderId) {
 function onFolderSelectChange() {
   const val = document.getElementById('noteFolder').value;
   checkAssignPrompt(val);
+  markDirty();
 }
 
 function assignFolder() {
@@ -459,6 +507,7 @@ function assignFolder() {
   if (val) {
     document.getElementById('noteFolder').value = val;
     document.getElementById('assignPrompt').style.display = 'none';
+    markDirty();
   }
 }
 
@@ -476,6 +525,7 @@ function renderActions() {
 function addAction() {
   editActions.push({ id: 'a'+(++actionCounter), text:'', assignee:'', done:false });
   renderActions();
+  markDirty();
   const inputs = document.querySelectorAll('.action-input');
   if (inputs.length) inputs[inputs.length-1].focus();
 }
@@ -483,6 +533,7 @@ function addAction() {
 function toggleAction(i) {
   editActions[i].done = !editActions[i].done;
   renderActions();
+  markDirty();
   if (editActions[i].done) {
     const box = document.querySelectorAll('#actionList .action-checkbox')[i];
     if (box) box.classList.add('pop');
@@ -491,26 +542,46 @@ function toggleAction(i) {
 
 function editAction(i, field, val) {
   editActions[i][field] = val;
+  markDirty();
 }
 
 function removeAction(i) {
   editActions.splice(i,1);
   renderActions();
+  markDirty();
 }
 
+// Explicit Save button — an immediate flush of the open note.
 async function saveNote() {
+  await persistCurrentNote(true);
+}
+
+// Single write path for both the Save button (manual=true) and autosave
+// (manual=false). Manual saves nag on validation and toast the result; autosave
+// stays quiet and only updates the save-status indicator.
+async function persistCurrentNote(manual) {
+  cancelAutosave();
+  if (!state.activeNote) return { ok: false };
+
   const title = document.getElementById('noteTitle').value.trim();
   const folderId = document.getElementById('noteFolder').value;
 
-  if (!title) { showHint('Please add a title.'); return; }
-  if (!folderId) {
-    document.getElementById('assignPrompt').style.display = 'flex';
-    showHint('Please assign a project first.');
-    return;
+  // A note needs a title and a project before it can be saved.
+  if (!title || !folderId) {
+    if (manual) {
+      if (!title) { showHint('Please add a title.'); return { ok: false }; }
+      document.getElementById('assignPrompt').style.display = 'flex';
+      showHint('Please assign a project first.');
+      return { ok: false };
+    }
+    setStatus('Unsaved — add a title and project', 'muted');
+    return { ok: false };
   }
 
+  const seq = editSeq;
+  const wasNew = state.isNew;
   const note = {
-    id: state.isNew ? 'n'+(Date.now()) : state.activeNote,
+    id: wasNew ? 'n'+(Date.now()) : state.activeNote,
     folderId,
     title,
     date: document.getElementById('noteDate').value,
@@ -519,7 +590,9 @@ async function saveNote() {
     actions: editActions.map(a => ({...a}))
   };
 
-  if (state.isNew) {
+  // Commit to in-memory state synchronously (before any await) so a note switch
+  // or a second autosave sees the assigned id and not-new status.
+  if (wasNew) {
     state.notes.push(note);
     state.activeNote = note.id;
     state.isNew = false;
@@ -528,24 +601,29 @@ async function saveNote() {
     const idx = state.notes.findIndex(n => n.id === note.id);
     if (idx >= 0) state.notes[idx] = note;
   }
+  const noteId = note.id;
 
+  setStatus('Saving…');
   const result = await saveNoteDoc(note);
+  // If the editor moved to a different note mid-save, leave its status alone.
+  const stillOpen = state.activeNote === noteId;
+
   if (result.conflict) {
-    // Keep the user's edits in state/editor and let them decide (Phase 2.2).
-    setStatus('');
-    showConflictModal(note);
+    if (manual) { setStatus(''); showConflictModal(note); }
+    else if (stillOpen) setStatus('⚠ Changed on another device — press Save', 'error');
     render();
-    return;
+    return result;
   }
   if (result.ok) {
-    setStatus('Saved ✓');
-    setTimeout(() => setStatus(''), 2000);
-    showToast('Note saved');
+    if (stillOpen && editSeq === seq) { savedSeq = seq; setStatus('Saved ✓'); }
+    else if (stillOpen) setStatus('Unsaved…', 'muted'); // newer edits arrived during the save
+    if (manual) showToast('Note saved');
   } else {
-    setStatus('');
-    showToast('⚠ Save failed — check your connection');
+    if (stillOpen) setStatus(navigator.onLine ? '⚠ Save failed' : '⚠ Offline', 'error');
+    if (manual) showToast('⚠ Save failed — check your connection');
   }
   render();
+  return result;
 }
 
 function showConflictModal(note) {
@@ -561,11 +639,11 @@ async function overwriteConflictNote() {
   if (!note) return;
   const ok = await forceSaveNoteDoc(note);
   if (ok) {
+    savedSeq = editSeq; // the user's version is now the saved one
     setStatus('Saved ✓');
-    setTimeout(() => setStatus(''), 2000);
     showToast('Note saved — overwrote the other version');
   } else {
-    setStatus('');
+    setStatus(navigator.onLine ? '⚠ Save failed' : '⚠ Offline', 'error');
     showToast('⚠ Save failed — check your connection');
   }
   render();
@@ -816,8 +894,14 @@ function esc(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
-function setStatus(msg) {
-  document.getElementById('syncStatus').textContent = msg;
+// type: undefined = brand green (saving/saved), 'muted' = neutral (unsaved),
+// 'error' = brick red (offline/failed/conflict).
+function setStatus(msg, type) {
+  const el = document.getElementById('syncStatus');
+  el.textContent = msg;
+  el.classList.remove('status-muted', 'status-error');
+  if (type === 'muted') el.classList.add('status-muted');
+  else if (type === 'error') el.classList.add('status-error');
 }
 
 // Coerce data arriving from outside the current session (a Firestore load or an
@@ -962,6 +1046,7 @@ function mobileShowDetail() {
 }
 
 function mobileBack() {
+  commitPendingEdits();
   mobileShowNotes();
   state.activeNote = null;
   showEmpty();
@@ -1008,6 +1093,9 @@ function resetLocalState() {
   editActions = [];
   noteVersions = {};
   conflictNote = null;
+  editSeq = 0;
+  savedSeq = 0;
+  cancelAutosave();
   const searchInput = document.getElementById('searchInput');
   if (searchInput) searchInput.value = '';
   showEmpty();
@@ -1045,8 +1133,14 @@ onAuthStateChanged(auth, async (user) => {
   }
 });
 
+// Warn before leaving with an unsaved (or still-saving) edit in the editor.
+window.addEventListener('beforeunload', (e) => {
+  if (editSeq !== savedSeq) { e.preventDefault(); e.returnValue = ''; }
+});
+
 // Expose functions to global scope (required for onclick attributes with type="module")
 window.selectFolder = selectFolder;
+window.markDirty = markDirty;
 window.selectNote = selectNote;
 window.newNote = newNote;
 window.saveNote = saveNote;
