@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs, writeBatch, serverTimestamp, runTransaction } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
 // Muted-but-specific folder tones, derived from the Vesatile palette
 const FOLDER_COLORS = ['#3B5244','#8B3A3A','#A8842C','#4A6274','#6E5A7E','#31606B','#9C6B4E','#7A8581'];
@@ -70,6 +70,23 @@ const auth = getAuth(firebaseApp);
 const db = getFirestore(firebaseApp);
 const googleProvider = new GoogleAuthProvider();
 let currentUser = null;
+
+// Conflict detection (Masterplan Phase 2.2): the server `updatedAt` each note
+// had when this client last loaded/saved it. On save we compare against the
+// live server value inside a transaction; a mismatch means another device wrote
+// in between, so we warn instead of silently clobbering. `conflictNote` holds
+// the user's pending version while the conflict modal is open.
+let noteVersions = {};
+let conflictNote = null;
+
+// Firestore Timestamps: prefer isEqual, fall back to millis; treat missing as unequal.
+function tsEqual(a, b) {
+  if (!a || !b) return a === b;
+  if (typeof a.isEqual === 'function') { try { return a.isEqual(b); } catch(e) {} }
+  const am = a.toMillis ? a.toMillis() : a;
+  const bm = b.toMillis ? b.toMillis() : b;
+  return am === bm;
+}
 
 const DEFAULT_DATA = {
   folders: [
@@ -147,6 +164,8 @@ async function loadUserData(uid) {
       });
       state.folders = clean.folders;
       state.notes = clean.notes;
+      noteVersions = {};
+      notesSnap.docs.forEach(d => { noteVersions[d.id] = d.data().updatedAt || null; });
       return;
     }
 
@@ -182,17 +201,56 @@ function trackSave(promise) {
   return promise;
 }
 
+// Returns { ok } on success, { ok:false, conflict:true } if the note changed on
+// another device since we loaded it, or { ok:false } on a plain write failure.
 async function saveNoteDoc(note) {
-  if (!currentUser) return false;
+  if (!currentUser) return { ok: false };
+  const ref = noteRef(currentUser.uid, note.id);
+  const expected = noteVersions[note.id];
   return trackSave((async () => {
     try {
-      await setDoc(noteRef(currentUser.uid, note.id), { ...note, updatedAt: serverTimestamp(), schemaVersion: SCHEMA_VERSION });
+      await runTransaction(db, async (tx) => {
+        const snap = await tx.get(ref);
+        // Only a note we've seen before can conflict; new notes (no expected
+        // version) and first-write races just proceed.
+        if (snap.exists() && expected && !tsEqual(snap.data().updatedAt, expected)) {
+          const err = new Error('conflict'); err.code = 'conflict'; throw err;
+        }
+        tx.set(ref, { ...note, updatedAt: serverTimestamp(), schemaVersion: SCHEMA_VERSION });
+      });
+      await refreshNoteVersion(ref, note.id);
+      return { ok: true };
+    } catch(e) {
+      if (e && e.code === 'conflict') return { ok: false, conflict: true };
+      console.warn('Failed to save note to Firestore', e);
+      return { ok: false };
+    }
+  })());
+}
+
+// Unconditional write — used when the user chooses to overwrite a conflicting note.
+async function forceSaveNoteDoc(note) {
+  if (!currentUser) return false;
+  const ref = noteRef(currentUser.uid, note.id);
+  return trackSave((async () => {
+    try {
+      await setDoc(ref, { ...note, updatedAt: serverTimestamp(), schemaVersion: SCHEMA_VERSION });
+      await refreshNoteVersion(ref, note.id);
       return true;
     } catch(e) {
-      console.warn('Failed to save note to Firestore', e);
+      console.warn('Failed to force-save note to Firestore', e);
       return false;
     }
   })());
+}
+
+// After a write, re-read the resolved server timestamp so the next save in this
+// session compares against the value we actually wrote (not a stale one).
+async function refreshNoteVersion(ref, id) {
+  try {
+    const fresh = await getDoc(ref);
+    noteVersions[id] = fresh.exists() ? (fresh.data().updatedAt || null) : null;
+  } catch(e) { noteVersions[id] = null; }
 }
 
 async function deleteNoteDoc(id) {
@@ -471,8 +529,15 @@ async function saveNote() {
     if (idx >= 0) state.notes[idx] = note;
   }
 
-  const ok = await saveNoteDoc(note);
-  if (ok) {
+  const result = await saveNoteDoc(note);
+  if (result.conflict) {
+    // Keep the user's edits in state/editor and let them decide (Phase 2.2).
+    setStatus('');
+    showConflictModal(note);
+    render();
+    return;
+  }
+  if (result.ok) {
     setStatus('Saved ✓');
     setTimeout(() => setStatus(''), 2000);
     showToast('Note saved');
@@ -481,6 +546,62 @@ async function saveNote() {
     showToast('⚠ Save failed — check your connection');
   }
   render();
+}
+
+function showConflictModal(note) {
+  conflictNote = note;
+  document.getElementById('conflictModal').classList.add('show');
+}
+
+// Keep the user's version — write it unconditionally over the other device's.
+async function overwriteConflictNote() {
+  closeModal('conflictModal');
+  const note = conflictNote;
+  conflictNote = null;
+  if (!note) return;
+  const ok = await forceSaveNoteDoc(note);
+  if (ok) {
+    setStatus('Saved ✓');
+    setTimeout(() => setStatus(''), 2000);
+    showToast('Note saved — overwrote the other version');
+  } else {
+    setStatus('');
+    showToast('⚠ Save failed — check your connection');
+  }
+  render();
+}
+
+// Discard the user's edits and load the version saved on the other device.
+async function reloadConflictNote() {
+  closeModal('conflictModal');
+  const note = conflictNote;
+  conflictNote = null;
+  if (!note || !currentUser) return;
+  try {
+    const ref = noteRef(currentUser.uid, note.id);
+    const snap = await getDoc(ref);
+    if (snap.exists()) {
+      const server = sanitizeData({ folders: [], notes: [{ ...snap.data(), id: snap.id }] }).notes[0];
+      noteVersions[note.id] = snap.data().updatedAt || null;
+      const idx = state.notes.findIndex(n => n.id === note.id);
+      if (idx >= 0) state.notes[idx] = server; else state.notes.push(server);
+      if (state.activeNote === note.id) {
+        editActions = server.actions.map(a => ({ ...a }));
+        populateForm(server);
+      }
+      showToast('Loaded the version from the other device');
+    } else {
+      // Deleted elsewhere — drop it locally too.
+      delete noteVersions[note.id];
+      state.notes = state.notes.filter(n => n.id !== note.id);
+      if (state.activeNote === note.id) { state.activeNote = null; showEmpty(); }
+      showToast('That note was deleted on the other device');
+    }
+    render();
+  } catch(e) {
+    console.warn('Failed to reload conflicting note', e);
+    showToast('⚠ Could not reload — check your connection');
+  }
 }
 
 function requestDeleteNote() {
@@ -885,6 +1006,8 @@ function resetLocalState() {
   state.isNew = false;
   state.searchQuery = '';
   editActions = [];
+  noteVersions = {};
+  conflictNote = null;
   const searchInput = document.getElementById('searchInput');
   if (searchInput) searchInput.value = '';
   showEmpty();
@@ -929,6 +1052,8 @@ window.newNote = newNote;
 window.saveNote = saveNote;
 window.requestDeleteNote = requestDeleteNote;
 window.confirmDeleteNote = confirmDeleteNote;
+window.overwriteConflictNote = overwriteConflictNote;
+window.reloadConflictNote = reloadConflictNote;
 window.addAction = addAction;
 window.toggleAction = toggleAction;
 window.editAction = editAction;

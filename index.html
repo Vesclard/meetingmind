@@ -207,6 +207,19 @@
   </div>
 </div>
 
+<!-- Sync-conflict modal (a note changed on another device since it was opened) -->
+<div class="modal-overlay" id="conflictModal">
+  <div class="modal">
+    <div class="modal-eyebrow">Sync conflict</div>
+    <h3>This note changed on another device</h3>
+    <p>A newer version was saved elsewhere since you opened this note. Choose which one to keep — the other will be replaced.</p>
+    <div class="modal-actions">
+      <button class="modal-cancel" onclick="reloadConflictNote()">Use their version</button>
+      <button class="modal-confirm danger" onclick="overwriteConflictNote()">Keep mine (overwrite)</button>
+    </div>
+  </div>
+</div>
+
 <!-- AI settings modal (BYOK — the user's own Anthropic key, stored only on this device) -->
 <div class="modal-overlay" id="settingsModal">
   <div class="modal settings-modal">

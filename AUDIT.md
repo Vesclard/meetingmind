@@ -98,7 +98,7 @@ Currently safe because all generated attributes use double quotes, but it's a on
 
 | # | Finding | Impact |
 |---|---|---|
-| R1 | **Last-write-wins across devices.** Whole `{folders, notes}` doc rewritten on every save; no `updatedAt`, no transaction. Editing on two devices silently destroys one side's work. (Handoff Priority 2, still open.) | Data loss |
+| R1 | **Last-write-wins across devices.** ⏳ *detection added in code 2026-07-10 (Phase 2.2), pending live verification* — per-note `updatedAt` server timestamps + a transactional read-before-write in `saveNoteDoc` now catch concurrent edits and prompt Keep-mine / Use-theirs instead of silently clobbering. Detection, not automatic merge resolution. | Data loss |
 | R2 | **1 MiB Firestore document ceiling.** ✅ *fixed & deployed 2026-07-10 (Phase 2.1)* — dataset split into per-note docs + a `meta` doc; saves are per-note. Whole-doc ceiling and re-upload-everything cost eliminated; verified live. | Hard scaling wall |
 | R3 | **AI context = full dump.** `askAi` serializes *all* notes into the system prompt per question. Cost grows with corpus size and will eventually degrade answer quality. Fine now; becomes the binding constraint if the corpus grows or the product ever ships to others. | Cost + quality decay |
 | R4 | **No autosave, no dirty-state guard.** Navigating to another note or closing the tab discards unsaved edits without warning. | Silent edit loss |

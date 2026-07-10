@@ -98,7 +98,7 @@ Fixes: **S3, S4, S5**.
 
 Fixes: **R1, R2, R4, R6**. This is the largest structural change; do it as one focused effort with export-backup first.
 
-> **Status 2026-07-10:** item 1 ✅ **done, deployed, and verified live.** BYOK rules published to the console; the per-note code is on `main`/Vercel; owner confirmed the blob→per-note migration and CRUD round-trip cleanly in production. Items 2–5 ⬜ not started (item 2 next).
+> **Status 2026-07-10:** item 1 ✅ **done, deployed, and verified live.** BYOK rules published to the console; the per-note code is on `main`/Vercel; owner confirmed the blob→per-note migration and CRUD round-trip cleanly in production. Item 2 ✅ **implemented in code** — transactional `updatedAt` conflict *detection* in `saveNoteDoc` (`noteVersions` map + `tsEqual`), a sync-conflict modal with Keep-mine (`forceSaveNoteDoc`) / Use-theirs (`reloadConflictNote`); ⚠ not yet verified live (needs the two-browser test below). Items 3–5 ⬜ not started.
 
 1. **Migrate to per-note documents.**
    - New shape: `users/{uid}/meta` (doc: `{ folders }`) and `users/{uid}/notes/{noteId}` (one doc per note, plus `updatedAt` (server timestamp) and `schemaVersion`).

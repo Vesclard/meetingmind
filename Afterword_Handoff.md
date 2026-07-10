@@ -102,7 +102,8 @@ Firebase/Firestore has been **reconnected**, on a fresh project set up from scra
   - *Legacy shape (pre-migration):* one document per user at `users/{uid}` holding `{ folders: [...], notes: [...] }`, written whole after every mutation by the old `saveData()`. Retained per-user as a backup after migration.
 - **No migration from the old `localStorage` data.** This was a deliberate choice when Firebase was reconnected — Firestore started empty rather than uploading whatever was sitting in the browser's `afterword_v1` key. Any notes that were only ever in `localStorage` before this change are not automatically in Firestore; use Export (while on the old version) / Import (once signed in) if old local notes need to be recovered.
 - **Error handling:** Firestore read/write failures don't throw silently — `loadUserData`/`saveData` catch errors and surface a toast (e.g. "⚠ Save failed — check your connection") rather than only `console.warn`. This addresses the old Priority 2 "add loading/error states" item for the parts of it that apply now that sync is back.
-- **Still open:** conflict handling for concurrent edits across devices (last write still wins — see Section 9, Priority 2) and a "Reset app" button.
+- **Conflict handling (Phase 2.2, in code, pending live verification):** each note carries a server `updatedAt`; `saveNoteDoc` runs a transaction that compares the loaded `updatedAt` to the live one and, on mismatch, aborts and shows a sync-conflict modal (Keep-mine overwrites via `forceSaveNoteDoc`; Use-theirs reloads via `reloadConflictNote`). This is *detection*, not automatic merge — last-write-wins is no longer silent. `noteVersions` tracks the known timestamps; it's cleared on `resetLocalState`.
+- **Still open:** autosave + dirty guard, a real save-status indicator, and a "Reset app" button (Masterplan Phase 2 items 3–4).
 
 ---
 
