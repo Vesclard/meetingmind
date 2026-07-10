@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
 // Muted-but-specific folder tones, derived from the Vesatile palette
 const FOLDER_COLORS = ['#3B5244','#8B3A3A','#A8842C','#4A6274','#6E5A7E','#31606B','#9C6B4E','#7A8581'];
@@ -109,46 +109,116 @@ const DEFAULT_DATA = {
   ]
 };
 
-function userDocRef(uid) {
-  return doc(db, 'users', uid);
+// Per-note data model (Masterplan Phase 2.1). Folders live in a single
+// `meta/main` doc; each note is its own `notes/{noteId}` doc with an
+// `updatedAt` server timestamp. The legacy `users/{uid}` blob doc is retained
+// as a one-release backup after migration (marked with `migratedAt`), never
+// written to again. New Firestore paths need matching security rules deployed
+// before this ships — see afterword-security §1.
+const SCHEMA_VERSION = 2;
+
+function userDocRef(uid) { return doc(db, 'users', uid); }            // legacy blob (backup only)
+function metaRef(uid) { return doc(db, 'users', uid, 'meta', 'main'); }
+function notesColRef(uid) { return collection(db, 'users', uid, 'notes'); }
+function noteRef(uid, id) { return doc(db, 'users', uid, 'notes', id); }
+
+// Write the whole dataset into the per-note store (used for migration, seeding,
+// and import). Notes go in chunked batches because writeBatch caps at 500 ops.
+async function writeAllPerNote(uid, data) {
+  await setDoc(metaRef(uid), { folders: data.folders, schemaVersion: SCHEMA_VERSION });
+  for (let i = 0; i < data.notes.length; i += 400) {
+    const batch = writeBatch(db);
+    data.notes.slice(i, i + 400).forEach(n => {
+      batch.set(noteRef(uid, n.id), { ...n, updatedAt: serverTimestamp(), schemaVersion: SCHEMA_VERSION });
+    });
+    await batch.commit();
+  }
 }
 
 async function loadUserData(uid) {
   try {
-    const snap = await getDoc(userDocRef(uid));
-    if (snap.exists()) {
-      const clean = sanitizeData(snap.data());
+    const [metaSnap, notesSnap] = await Promise.all([getDoc(metaRef(uid)), getDocs(notesColRef(uid))]);
+
+    // Per-note store already exists (native or previously migrated) — source of truth.
+    if (metaSnap.exists() || notesSnap.size > 0) {
+      const clean = sanitizeData({
+        folders: metaSnap.exists() ? metaSnap.data().folders : [],
+        notes: notesSnap.docs.map(d => ({ ...d.data(), id: d.id }))
+      });
       state.folders = clean.folders;
       state.notes = clean.notes;
-    } else {
-      // Deep-clone so per-account edits never mutate the shared DEFAULT_DATA constant.
-      state.folders = JSON.parse(JSON.stringify(DEFAULT_DATA.folders));
-      state.notes = JSON.parse(JSON.stringify(DEFAULT_DATA.notes));
-      await setDoc(userDocRef(uid), { folders: state.folders, notes: state.notes });
+      return;
     }
+
+    // No per-note store yet — migrate a legacy blob if present, else seed defaults.
+    const legacySnap = await getDoc(userDocRef(uid));
+    if (legacySnap.exists() && (legacySnap.data().notes || legacySnap.data().folders)) {
+      const clean = sanitizeData(legacySnap.data());
+      await writeAllPerNote(uid, clean);
+      // Keep the blob one release as a backup; mark it so we never re-migrate.
+      await setDoc(userDocRef(uid), { migratedAt: serverTimestamp() }, { merge: true });
+      state.folders = clean.folders;
+      state.notes = clean.notes;
+      return;
+    }
+
+    // Brand-new user — seed defaults into the per-note store.
+    const seeded = sanitizeData(DEFAULT_DATA);
+    await writeAllPerNote(uid, seeded);
+    state.folders = seeded.folders;
+    state.notes = seeded.notes;
   } catch(e) {
     console.warn('Failed to load notes from Firestore', e);
     showToast('⚠ Could not load your notes — check your connection');
   }
 }
 
+// Tracks the most recent in-flight write so sign-out can await it (see
+// signOutUser) — a note must never be abandoned mid-save on account switch.
 let pendingSave = null;
+function trackSave(promise) {
+  pendingSave = promise;
+  promise.finally(() => { if (pendingSave === promise) pendingSave = null; });
+  return promise;
+}
 
-async function saveData() {
+async function saveNoteDoc(note) {
   if (!currentUser) return false;
-  const promise = (async () => {
+  return trackSave((async () => {
     try {
-      await setDoc(userDocRef(currentUser.uid), { folders: state.folders, notes: state.notes });
+      await setDoc(noteRef(currentUser.uid, note.id), { ...note, updatedAt: serverTimestamp(), schemaVersion: SCHEMA_VERSION });
       return true;
     } catch(e) {
-      console.warn('Failed to save notes to Firestore', e);
+      console.warn('Failed to save note to Firestore', e);
       return false;
     }
-  })();
-  pendingSave = promise;
-  const result = await promise;
-  if (pendingSave === promise) pendingSave = null;
-  return result;
+  })());
+}
+
+async function deleteNoteDoc(id) {
+  if (!currentUser) return false;
+  return trackSave((async () => {
+    try {
+      await deleteDoc(noteRef(currentUser.uid, id));
+      return true;
+    } catch(e) {
+      console.warn('Failed to delete note from Firestore', e);
+      return false;
+    }
+  })());
+}
+
+async function saveMeta() {
+  if (!currentUser) return false;
+  return trackSave((async () => {
+    try {
+      await setDoc(metaRef(currentUser.uid), { folders: state.folders, schemaVersion: SCHEMA_VERSION });
+      return true;
+    } catch(e) {
+      console.warn('Failed to save folders to Firestore', e);
+      return false;
+    }
+  })());
 }
 
 async function signInWithGoogle() {
@@ -401,7 +471,7 @@ async function saveNote() {
     if (idx >= 0) state.notes[idx] = note;
   }
 
-  const ok = await saveData();
+  const ok = await saveNoteDoc(note);
   if (ok) {
     setStatus('Saved ✓');
     setTimeout(() => setStatus(''), 2000);
@@ -424,7 +494,7 @@ async function confirmDeleteNote() {
   const id = state.activeNote;
   state.notes = state.notes.filter(n => n.id !== id);
   state.activeNote = null;
-  const ok = await saveData();
+  const ok = await deleteNoteDoc(id);
   showEmpty();
   showToast(ok ? 'Note deleted' : '⚠ Delete failed to sync — check your connection');
   render();
@@ -477,7 +547,7 @@ async function confirmAddFolder() {
   const color = FOLDER_COLORS[state.folders.length % FOLDER_COLORS.length];
   const folder = { id: 'f'+(Date.now()), name, color };
   state.folders.push(folder);
-  const ok = await saveData();
+  const ok = await saveMeta();
   closeModal('folderModal');
   render();
   showToast(ok ? 'Project "'+name+'" created' : '⚠ Created locally, but failed to sync');
@@ -711,7 +781,15 @@ function importData(e) {
 
       state.activeNote = null;
       state.activeFolder = null;
-      const ok = await saveData();
+      // Persist only the folders (meta) and the notes that actually changed.
+      let ok = true;
+      if (currentUser) {
+        try {
+          await writeAllPerNote(currentUser.uid, { folders: state.folders, notes: [...newNotes, ...updatedNotes] });
+        } catch(e) { console.warn('Import sync failed', e); ok = false; }
+      } else {
+        ok = false;
+      }
       showEmpty();
       render();
 

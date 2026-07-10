@@ -98,6 +98,8 @@ Fixes: **S3, S4, S5**.
 
 Fixes: **R1, R2, R4, R6**. This is the largest structural change; do it as one focused effort with export-backup first.
 
+> **Status 2026-07-10:** item 1 ✅ **implemented in code** (per-note refs, `writeAllPerNote`, migration/seed logic in `loadUserData`, per-doc `saveNoteDoc`/`deleteNoteDoc`/`saveMeta`, import batch-write) — ⚠ **deploy-gated**: the deployed Firestore rules must gain a recursive `match /{document=**}` under `users/{uid}` (same `uid ==` condition, plus the email pin if in private mode) **before** this ships, or every write to the new paths is denied. Not yet verified against live Firestore (needs the owner: deploy rules → sign in → confirm migration + CRUD). Items 2–5 ⬜ not started.
+
 1. **Migrate to per-note documents.**
    - New shape: `users/{uid}/meta` (doc: `{ folders }`) and `users/{uid}/notes/{noteId}` (one doc per note, plus `updatedAt` (server timestamp) and `schemaVersion`).
    - Migration in `loadUserData`: if the legacy blob doc exists and the subcollection is empty, split it into per-note docs, write `meta`, keep the blob as `users/{uid}` with a `migratedAt` marker (don't delete for one release).
