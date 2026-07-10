@@ -1195,6 +1195,7 @@ html { scrollbar-color: var(--line) transparent; scrollbar-width: thin; }
 .settings-note a { color: var(--brand); }
 
 .ai-settings-btn { width: 100%; margin-top: 8px; }
+.kofi-btn { width: 100%; margin-top: 8px; text-decoration: none; }
 
 /* AI panel — no-key state */
 .ai-keyprompt {
