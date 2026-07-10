@@ -699,6 +699,40 @@ async function confirmDeleteNote() {
   render();
 }
 
+function openResetModal() {
+  document.getElementById('resetModal').classList.add('show');
+}
+
+// Wipe every note doc + meta and reseed the default example set (Phase 2.4).
+// The legacy blob backup at users/{uid} is left untouched.
+async function resetAppData() {
+  closeModal('resetModal');
+  if (!currentUser) return;
+  const uid = currentUser.uid;
+  try {
+    setStatus('Resetting…');
+    // Delete all existing note docs (chunked — writeBatch caps at 500 ops).
+    const snap = await getDocs(notesColRef(uid));
+    for (let i = 0; i < snap.docs.length; i += 400) {
+      const batch = writeBatch(db);
+      snap.docs.slice(i, i + 400).forEach(d => batch.delete(d.ref));
+      await batch.commit();
+    }
+    // Reseed defaults (overwrites meta + writes the default notes).
+    await writeAllPerNote(uid, sanitizeData(DEFAULT_DATA));
+    // Reload local state from the fresh store.
+    resetLocalState();
+    await loadUserData(uid);
+    render();
+    setStatus('');
+    showToast('App reset to the starting example set');
+  } catch(e) {
+    console.warn('Reset failed', e);
+    setStatus(navigator.onLine ? '⚠ Reset failed' : '⚠ Offline', 'error');
+    showToast('⚠ Reset failed — check your connection');
+  }
+}
+
 function handleSearch() {
   state.searchQuery = document.getElementById('searchInput').value;
   render();
@@ -1148,6 +1182,8 @@ window.requestDeleteNote = requestDeleteNote;
 window.confirmDeleteNote = confirmDeleteNote;
 window.overwriteConflictNote = overwriteConflictNote;
 window.reloadConflictNote = reloadConflictNote;
+window.openResetModal = openResetModal;
+window.resetAppData = resetAppData;
 window.addAction = addAction;
 window.toggleAction = toggleAction;
 window.editAction = editAction;

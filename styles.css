@@ -1199,6 +1199,8 @@ html { scrollbar-color: var(--line) transparent; scrollbar-width: thin; }
 .settings-note a { color: var(--brand); }
 
 .ai-settings-btn { width: 100%; }
+.reset-btn { width: 100%; }
+.reset-btn:hover { border-color: var(--danger); color: var(--danger); }
 /* Warmer than the plain io-btns (tinted green, brand border/text) so it draws
    the eye, but short of the solid primary CTA. Hover promotes to a filled pill
    with the same gentle lift as .new-note-btn. Never brick red. */
