@@ -98,10 +98,10 @@ Currently safe because all generated attributes use double quotes, but it's a on
 
 | # | Finding | Impact |
 |---|---|---|
-| R1 | **Last-write-wins across devices.** ⏳ *detection added in code 2026-07-10 (Phase 2.2), pending live verification* — per-note `updatedAt` server timestamps + a transactional read-before-write in `saveNoteDoc` now catch concurrent edits and prompt Keep-mine / Use-theirs instead of silently clobbering. Detection, not automatic merge resolution. | Data loss |
+| R1 | **Last-write-wins across devices.** ✅ *detection fixed & verified 2026-07-10 (Phase 2.2)* — per-note `updatedAt` server timestamps + a transactional read-before-write in `saveNoteDoc` catch concurrent edits and prompt Keep-mine / Use-theirs instead of silently clobbering. Detection, not automatic merge resolution. | Data loss |
 | R2 | **1 MiB Firestore document ceiling.** ✅ *fixed & deployed 2026-07-10 (Phase 2.1)* — dataset split into per-note docs + a `meta` doc; saves are per-note. Whole-doc ceiling and re-upload-everything cost eliminated; verified live. | Hard scaling wall |
 | R3 | **AI context = full dump.** `askAi` serializes *all* notes into the system prompt per question. Cost grows with corpus size and will eventually degrade answer quality. Fine now; becomes the binding constraint if the corpus grows or the product ever ships to others. | Cost + quality decay |
-| R4 | **No autosave, no dirty-state guard.** ⏳ *added in code 2026-07-10 (Phase 2.3), pending live verification* — ~2s debounced autosave of the open note, flush-on-navigation, a `beforeunload` guard while dirty, and a real save-status indicator (Unsaved… / Saving… / Saved ✓ / ⚠ Offline). | Silent edit loss |
+| R4 | **No autosave, no dirty-state guard.** ✅ *fixed & verified 2026-07-10 (Phase 2.3)* — ~2s debounced autosave of the open note, flush-on-navigation, a `beforeunload` guard while dirty, and a real save-status indicator (Unsaved… / Saving… / Saved ✓ / ⚠ Offline). | Silent edit loss |
 | R5 | **Delete is one click, no confirm, no undo.** ✅ *fixed 2026-07-10 (Phase 1.4)* — `requestDeleteNote` now opens a styled confirm modal; `confirmDeleteNote` performs the destroy. | Accidental data loss |
 | R6 | **No "Reset app" affordance** (handoff P2) and no loading state during the sign-in data fetch beyond static text. | Papercuts |
 | R7 | Folders can't be renamed, recolored, or deleted (handoff P3). Deleting a folder needs a decision about orphaned notes. | Feature gap |
