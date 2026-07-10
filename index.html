@@ -151,7 +151,7 @@
         <div class="save-bar">
           <button class="save-btn btn-sheen" onclick="saveNote()">Save note</button>
           <span class="save-hint" id="saveHint"></span>
-          <button class="delete-btn" onclick="deleteNote()" id="deleteBtn" style="display:none;">Delete</button>
+          <button class="delete-btn" onclick="requestDeleteNote()" id="deleteBtn" style="display:none;">Delete</button>
         </div>
       </div>
 
@@ -190,6 +190,19 @@
     <div class="modal-actions">
       <button class="modal-cancel" onclick="closeModal('folderModal')">Cancel</button>
       <button class="modal-confirm btn-sheen" onclick="confirmAddFolder()">Create project</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete-note confirm modal -->
+<div class="modal-overlay" id="deleteModal">
+  <div class="modal">
+    <div class="modal-eyebrow">Delete note</div>
+    <h3>Delete this note?</h3>
+    <p>This permanently removes the note and its action items. It can't be undone.</p>
+    <div class="modal-actions">
+      <button class="modal-cancel" onclick="closeModal('deleteModal')">Cancel</button>
+      <button class="modal-confirm danger" onclick="confirmDeleteNote()">Delete note</button>
     </div>
   </div>
 </div>

@@ -78,9 +78,13 @@ This is self-XSS (the user must import a malicious file), and the same-origin da
 
 **Fix (Phase 1):** validate imports structurally — ids/names/colors must be strings, colors must match `/^#[0-9a-fA-F]{6}$/`, ids must match `/^[a-zA-Z0-9_-]+$/`, actions must be an array of the expected shape; regenerate ids that fail. Apply the same sanitation once on `loadUserData`.
 
+> **Status 2026-07-10:** ✅ **fixed** (Phase 1.2). `sanitizeData({folders, notes})` in `app.js` regenerates non-conforming ids, replaces bad colors with a `FOLDER_COLORS` entry, coerces names/titles/bodies to strings, and reshapes actions; applied in both `loadUserData` and `importData`. The two raw `f.color` interpolations now also pass through `esc()` for defense-in-depth.
+
 ### S5 — LOW: `esc()` doesn't escape single quotes
 
 Currently safe because all generated attributes use double quotes, but it's a one-refactor-away trap given the inline-handler pattern. Add `.replace(/'/g,'&#39;')`.
+
+> **Status 2026-07-10:** ✅ **fixed** (Phase 1.3). `esc()` now appends `.replace(/'/g,'&#39;')`.
 
 ### S6 — LOW: Supply-chain and misc hardening
 
@@ -98,7 +102,7 @@ Currently safe because all generated attributes use double quotes, but it's a on
 | R2 | **1 MiB Firestore document ceiling.** The entire dataset is one document. A few hundred long notes will hit the hard limit and every save will start failing. Also every save re-uploads everything — write cost grows linearly with total data. | Hard scaling wall |
 | R3 | **AI context = full dump.** `askAi` serializes *all* notes into the system prompt per question. Cost grows with corpus size and will eventually degrade answer quality. Fine now; becomes the binding constraint if the corpus grows or the product ever ships to others. | Cost + quality decay |
 | R4 | **No autosave, no dirty-state guard.** Navigating to another note or closing the tab discards unsaved edits without warning. | Silent edit loss |
-| R5 | **Delete is one click, no confirm, no undo.** `deleteNote` immediately destroys and syncs. | Accidental data loss |
+| R5 | **Delete is one click, no confirm, no undo.** ✅ *fixed 2026-07-10 (Phase 1.4)* — `requestDeleteNote` now opens a styled confirm modal; `confirmDeleteNote` performs the destroy. | Accidental data loss |
 | R6 | **No "Reset app" affordance** (handoff P2) and no loading state during the sign-in data fetch beyond static text. | Papercuts |
 | R7 | Folders can't be renamed, recolored, or deleted (handoff P3). Deleting a folder needs a decision about orphaned notes. | Feature gap |
 

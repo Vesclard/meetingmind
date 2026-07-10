@@ -117,9 +117,9 @@ async function loadUserData(uid) {
   try {
     const snap = await getDoc(userDocRef(uid));
     if (snap.exists()) {
-      const data = snap.data();
-      state.folders = data.folders || [];
-      state.notes = data.notes || [];
+      const clean = sanitizeData(snap.data());
+      state.folders = clean.folders;
+      state.notes = clean.notes;
     } else {
       // Deep-clone so per-account edits never mutate the shared DEFAULT_DATA constant.
       state.folders = JSON.parse(JSON.stringify(DEFAULT_DATA.folders));
@@ -212,7 +212,7 @@ function renderFolders() {
   state.folders.forEach(f => {
     const count = state.notes.filter(n => n.folderId === f.id).length;
     html += `<div class="folder-item ${state.activeFolder === f.id ? 'active' : ''}" onclick="selectFolder('${f.id}')">
-      <div class="folder-dot" style="background:${f.color}"></div>
+      <div class="folder-dot" style="background:${esc(f.color)}"></div>
       <span class="folder-name">${esc(f.name)}</span>
       <span class="folder-count">${count}</span>
     </div>`;
@@ -255,7 +255,7 @@ function renderNoteList() {
     const open = n.actions.filter(a => !a.done).length;
     return `<div class="note-card ${state.activeNote === n.id ? 'active' : ''}" onclick="selectNote('${n.id}')">
       <div class="note-card-title">${esc(n.title)}</div>
-      <div class="note-card-meta">${formatDate(n.date)}${f ? ' · <span class="meta-proj"><i style="background:'+f.color+'"></i>'+esc(f.name)+'</span>' : ''}${open ? ' · <span class="meta-open">'+open+' open</span>' : ''}</div>
+      <div class="note-card-meta">${formatDate(n.date)}${f ? ' · <span class="meta-proj"><i style="background:'+esc(f.color)+'"></i>'+esc(f.name)+'</span>' : ''}${open ? ' · <span class="meta-open">'+open+' open</span>' : ''}</div>
       <div class="note-card-preview">${esc(n.body)}</div>
     </div>`;
   }).join('');
@@ -413,7 +413,13 @@ async function saveNote() {
   render();
 }
 
-async function deleteNote() {
+function requestDeleteNote() {
+  if (!state.activeNote || state.activeNote === 'new') return;
+  document.getElementById('deleteModal').classList.add('show');
+}
+
+async function confirmDeleteNote() {
+  closeModal('deleteModal');
   if (!state.activeNote || state.activeNote === 'new') return;
   const id = state.activeNote;
   state.notes = state.notes.filter(n => n.id !== id);
@@ -616,11 +622,52 @@ function formatDate(d) {
 }
 
 function esc(s) {
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 function setStatus(msg) {
   document.getElementById('syncStatus').textContent = msg;
+}
+
+// Coerce data arriving from outside the current session (a Firestore load or an
+// imported JSON file) into the known shape with safe values. Ids and colors
+// render straight into innerHTML/onclick/style, so an attacker-controlled one is
+// an XSS vector under BYOK (key-theft stakes) — those get regenerated/replaced
+// rather than trusted. See afterword-security §3 and Masterplan Phase 1.2.
+const ID_RE = /^[a-zA-Z0-9_-]+$/;
+const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
+
+function safeId(v, prefix) {
+  return (typeof v === 'string' && ID_RE.test(v))
+    ? v
+    : prefix + Date.now() + Math.random().toString(36).slice(2, 8);
+}
+
+function sanitizeData(data) {
+  const rawFolders = Array.isArray(data && data.folders) ? data.folders : [];
+  const rawNotes = Array.isArray(data && data.notes) ? data.notes : [];
+  const folders = rawFolders.map((f, i) => ({
+    id: safeId(f && f.id, 'f'),
+    name: String((f && f.name) || ''),
+    color: (f && typeof f.color === 'string' && COLOR_RE.test(f.color))
+      ? f.color
+      : FOLDER_COLORS[i % FOLDER_COLORS.length]
+  }));
+  const notes = rawNotes.map(n => ({
+    id: safeId(n && n.id, 'n'),
+    folderId: (n && typeof n.folderId === 'string' && ID_RE.test(n.folderId)) ? n.folderId : '',
+    title: String((n && n.title) || ''),
+    date: String((n && n.date) || ''),
+    attendees: String((n && n.attendees) || ''),
+    body: String((n && n.body) || ''),
+    actions: Array.isArray(n && n.actions) ? n.actions.map(a => ({
+      id: safeId(a && a.id, 'a'),
+      text: String((a && a.text) || ''),
+      assignee: String((a && a.assignee) || ''),
+      done: !!(a && a.done)
+    })) : []
+  }));
+  return { folders, notes };
 }
 
 function exportData() {
@@ -645,12 +692,15 @@ function importData(e) {
       const parsed = JSON.parse(ev.target.result);
       if (!parsed.folders || !parsed.notes) throw new Error('Invalid format');
 
+      // Imported files are attacker-controlled input — validate before merging.
+      const clean = sanitizeData(parsed);
+
       const existingFolderIds = new Set(state.folders.map(f => f.id));
       const existingNoteIds = new Set(state.notes.map(n => n.id));
 
-      const newFolders = parsed.folders.filter(f => !existingFolderIds.has(f.id));
-      const newNotes = parsed.notes.filter(n => !existingNoteIds.has(n.id));
-      const updatedNotes = parsed.notes.filter(n => existingNoteIds.has(n.id));
+      const newFolders = clean.folders.filter(f => !existingFolderIds.has(f.id));
+      const newNotes = clean.notes.filter(n => !existingNoteIds.has(n.id));
+      const updatedNotes = clean.notes.filter(n => existingNoteIds.has(n.id));
 
       state.folders = [...state.folders, ...newFolders];
       updatedNotes.forEach(imported => {
@@ -799,7 +849,8 @@ window.selectFolder = selectFolder;
 window.selectNote = selectNote;
 window.newNote = newNote;
 window.saveNote = saveNote;
-window.deleteNote = deleteNote;
+window.requestDeleteNote = requestDeleteNote;
+window.confirmDeleteNote = confirmDeleteNote;
 window.addAction = addAction;
 window.toggleAction = toggleAction;
 window.editAction = editAction;
