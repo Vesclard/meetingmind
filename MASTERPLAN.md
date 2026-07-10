@@ -77,7 +77,7 @@ Storing a spendable credential in `localStorage` raises the stakes of any XSS fr
 
 Fixes: **S3, S4, S5**.
 
-> **Status 2026-07-10:** items 2, 3, 4 ✅ done (`sanitizeData` on load+import, `esc()` single-quote hardening + color interpolations, delete-confirm modal). Item 1 (Firestore rules) ⚠ **pending owner decision** — choose private (email-pin) vs production/BYOK (open sign-in) mode; it's a Firebase-console change plus a friendly permission-denied message, not a repo edit.
+> **Status 2026-07-10:** items 2, 3, 4 ✅ done (`sanitizeData` on load+import, `esc()` single-quote hardening + color interpolations, delete-confirm modal). Item 1 — **owner chose production/BYOK mode (open sign-in), 2026-07-10.** Rules are version-controlled in `firestore.rules` (recursive `users/{uid}/{document=**}`, uid-scoped, no email pin) and cover the Phase 2.1 subcollection paths. ⚠ **Owner must publish `firestore.rules` in the Firebase console** (no CLI here). No friendly permission-denied message needed — open sign-in is intended. Remaining gates before a *public announcement* (not before use): Firebase App Check + per-note field-size caps in the rules (see `firestore.rules` header), and the Phase 2 conflict/reliability work.
 
 1. **Firestore rules — pick per deployment mode.** The uid scoping (`request.auth.uid == uid`) is non-negotiable in both modes.
    - *Private mode (today, single user):* additionally pin the owner in the rules (Firebase console, not the repo):

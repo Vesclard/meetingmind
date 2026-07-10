@@ -1,0 +1,28 @@
+rules_version = '2';
+
+// Afterword — production / BYOK mode (open sign-in, per-user isolation).
+//
+// Each user (any Google account) may read and write ONLY their own
+// users/{uid} tree: the legacy blob doc at users/{uid}, the folders doc at
+// users/{uid}/meta/main, and every note at users/{uid}/notes/{noteId}. The
+// recursive {document=**} matches users/{uid} itself (zero extra segments) and
+// all descendants, so it covers the blob AND the per-note subcollections
+// introduced in Masterplan Phase 2.1.
+//
+// This file is the canonical, version-controlled source for the deployed
+// rules. It is NOT auto-deployed (this project has no Firebase CLI/build step):
+// paste it into the Firebase console (Firestore Database > Rules > Publish), or
+// run `firebase deploy --only firestore:rules` if the CLI is ever available.
+//
+// BEFORE a public announcement (afterword-security §6, Masterplan Phase 1.1
+// production mode): add Firebase App Check enforcement and per-note field-size
+// caps here (e.g. request.resource.data.body.size() < N on writes) to bound
+// Firestore quota consumption by strangers. Kept out for now to avoid shipping
+// rules that can't be tested from this environment.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}
