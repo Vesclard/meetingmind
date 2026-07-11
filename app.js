@@ -38,15 +38,17 @@ function anthropicHeaders(key) {
 
 // Single entry point for all Claude calls. Throws Error with a code message:
 // 'no-key' | 'auth' | 'rate' | 'network' | 'upstream'.
-async function callClaude({ system, messages, maxTokens = 2000 }) {
+async function callClaude({ system, messages, maxTokens = 2000, outputConfig }) {
   const key = getApiKey();
   if (!key) throw new Error('no-key');
   let res;
   try {
+    const body = { model: getAiModel(), max_tokens: maxTokens, system, messages };
+    if (outputConfig) body.output_config = outputConfig;
     res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: anthropicHeaders(key),
-      body: JSON.stringify({ model: getAiModel(), max_tokens: maxTokens, system, messages })
+      body: JSON.stringify(body)
     });
   } catch(e) { throw new Error('network'); }
   if (res.status === 401 || res.status === 403) throw new Error('auth');
@@ -324,6 +326,9 @@ let state = {
 
 let editActions = [];
 let actionCounter = 100;
+// AI-suggested action items awaiting accept/dismiss (Masterplan Phase 3.1).
+// Not part of editActions until accepted — never persisted as-is.
+let suggestedActions = [];
 
 // Autosave + dirty tracking (Masterplan Phase 2.3). `editSeq` increments on
 // every user edit to the open note; `savedSeq` is the value last persisted.
@@ -480,6 +485,8 @@ function populateForm(note) {
   document.getElementById('noteBody').value = note.body;
   populateFolderSelect('noteFolder', note.folderId);
   renderActions();
+  suggestedActions = [];
+  renderSuggestedActions();
   checkAssignPrompt(note.folderId);
   document.getElementById('saveHint').textContent = '';
   document.getElementById('deleteBtn').style.display = state.isNew ? 'none' : 'inline-block';
@@ -559,6 +566,80 @@ function removeAction(i) {
   editActions.splice(i,1);
   renderActions();
   markDirty();
+}
+
+function renderSuggestedActions() {
+  const el = document.getElementById('suggestedActions');
+  el.innerHTML = suggestedActions.map((a,i) => `
+    <div class="suggestion-chip">
+      <span class="suggestion-text">${esc(a.text)}${a.assignee ? ' <span class="suggestion-assignee">— '+esc(a.assignee)+'</span>' : ''}</span>
+      <button class="suggestion-accept" onclick="acceptSuggestion(${i})" title="Add this action">✓</button>
+      <button class="suggestion-dismiss" onclick="dismissSuggestion(${i})" title="Dismiss">×</button>
+    </div>`).join('');
+}
+
+function acceptSuggestion(i) {
+  const s = suggestedActions[i];
+  if (!s) return;
+  editActions.push({ id: 'a'+(++actionCounter), text: s.text, assignee: s.assignee || '', done:false });
+  suggestedActions.splice(i,1);
+  renderActions();
+  renderSuggestedActions();
+  markDirty();
+}
+
+function dismissSuggestion(i) {
+  suggestedActions.splice(i,1);
+  renderSuggestedActions();
+}
+
+const SUGGEST_ACTIONS_SCHEMA = {
+  type: 'object',
+  properties: {
+    actions: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          text: { type: 'string', description: 'Short, imperative action item' },
+          assignee: { type: 'string', description: 'Owner named in the notes, or empty string if none' }
+        },
+        required: ['text', 'assignee'],
+        additionalProperties: false
+      }
+    }
+  },
+  required: ['actions'],
+  additionalProperties: false
+};
+
+async function suggestActions() {
+  const body = document.getElementById('noteBody').value.trim();
+  if (!body) { showToast('Add some notes first.'); return; }
+  const btn = document.getElementById('suggestActionsBtn');
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Suggesting…';
+  try {
+    const raw = await callClaude({
+      system: 'Extract concrete action items from these meeting notes. Only include explicit commitments or follow-ups, not general discussion topics. Keep each action short and imperative. Set assignee to the person named as owner, or an empty string if none is named.',
+      messages: [{ role: 'user', content: body }],
+      outputConfig: { format: { type: 'json_schema', schema: SUGGEST_ACTIONS_SCHEMA } },
+      maxTokens: 1024
+    });
+    const parsed = JSON.parse(raw);
+    const found = (parsed.actions || []).filter(a => a.text && a.text.trim());
+    if (!found.length) {
+      showToast('No action items found in these notes.');
+    } else {
+      suggestedActions = suggestedActions.concat(found.map(a => ({ text: a.text.trim(), assignee: (a.assignee||'').trim() })));
+      renderSuggestedActions();
+    }
+  } catch(e) {
+    showToast(AI_ERROR_MESSAGES[e.message] || 'Something went wrong — try again.');
+  }
+  btn.disabled = false;
+  btn.textContent = original;
 }
 
 // Explicit Save button — an immediate flush of the open note.
@@ -1201,6 +1282,9 @@ window.addAction = addAction;
 window.toggleAction = toggleAction;
 window.editAction = editAction;
 window.removeAction = removeAction;
+window.suggestActions = suggestActions;
+window.acceptSuggestion = acceptSuggestion;
+window.dismissSuggestion = dismissSuggestion;
 window.openAddFolder = openAddFolder;
 window.confirmAddFolder = confirmAddFolder;
 window.closeModal = closeModal;

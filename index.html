@@ -146,7 +146,11 @@
 
             <div class="section-divider">Action items</div>
             <div class="action-list" id="actionList"></div>
-            <button class="add-action-btn" onclick="addAction()">+ Add action item</button>
+            <div class="suggested-actions" id="suggestedActions"></div>
+            <div class="actions-toolbar">
+              <button class="add-action-btn" onclick="addAction()">+ Add action item</button>
+              <button class="suggest-actions-btn" id="suggestActionsBtn" onclick="suggestActions()">✦ Suggest actions</button>
+            </div>
           </div>
         </div>
 
